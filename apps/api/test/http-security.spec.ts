@@ -36,13 +36,17 @@ describe("authentication", () => {
     const r = await api().get("/api/v1/auth/me").set("Authorization", `Bearer ${t}`).expect(401);
     expect(r.body.error.code).toBe("SESSION_REVOKED");
   });
-  it("refresh tokens rotate and reuse revokes the session", async () => {
+  it("refresh tokens rotate; concurrent refreshes are tolerated; stale reuse after the grace window revokes the session", async () => {
     const r = await api().post("/api/v1/auth/login").send({ email: w.manager.email, password: PASSWORD }).expect(200);
     const cookie = r.headers["set-cookie"][0].split(";")[0];
-    const r2 = await api().post("/api/v1/auth/refresh").set("Cookie", cookie).expect(200);
-    expect(r2.body.access_token).toBeTruthy();
+    const [a, b] = await Promise.all([api().post("/api/v1/auth/refresh").set("Cookie", cookie), api().post("/api/v1/auth/refresh").set("Cookie", cookie)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect([a, b].filter((x) => x.headers["set-cookie"]).length).toBe(1); // exactly one rotation
+    const sid = cookie.split("=")[1].split(".")[0];
+    await w.db.userSession.update({ where: { id: sid }, data: { rotated_at: new Date(Date.now() - 120_000) } });
     const reuse = await api().post("/api/v1/auth/refresh").set("Cookie", cookie).expect(401);
     expect(reuse.body.error.code).toBe("REFRESH_REUSED");
+    expect((await w.db.userSession.findUniqueOrThrow({ where: { id: sid } })).revoked_at).not.toBeNull();
   });
 });
 

@@ -47,7 +47,7 @@ export class AuthController {
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const r = await this.auth.refresh(req.cookies?.[COOKIE] ?? req.body?.refresh_token);
-    res.cookie(COOKIE, r.refreshToken, cookieOpts());
+    if (r.refreshToken) res.cookie(COOKIE, r.refreshToken, cookieOpts());
     return { access_token: r.accessToken };
   }
 

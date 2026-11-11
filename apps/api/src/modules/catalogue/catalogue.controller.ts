@@ -156,6 +156,13 @@ export class CatalogueController {
     return { unit_price: r.unitPrice, min_price: r.minPrice, source: r.source };
   }
 
+  @Get("catalogue/serials") @RequirePermissions("products.view")
+  async serials(@Auth() a: AuthContext, @Query("variant_id", ParseUUIDPipe) variantId: string, @Query("branch_id", ParseUUIDPipe) branchId: string) {
+    assertBranch(a, branchId);
+    const locs = await this.prisma.client.location.findMany({ where: { branch_id: branchId, is_sellable: true }, select: { id: true } });
+    return this.prisma.client.serialNumber.findMany({ where: { business_id: a.businessId, variant_id: variantId, status: "IN_STOCK", location_id: { in: locs.map((l) => l.id) } }, select: { id: true, serial: true, location_id: true }, orderBy: { serial: "asc" }, take: 200 });
+  }
+
   // ---------------------------------------------------------- reference data
   @Get("catalogue/reference") @RequirePermissions("products.view")
   async reference(@Auth() a: AuthContext) {

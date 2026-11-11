@@ -88,7 +88,7 @@ describe("batches, expiry and quarantine", () => {
     await w.stock(w.s1.id, v.id, "2", "50", { batch: "SOON", expiry: ymd(10) });
     await w.stock(w.s1.id, v.id, "5", "50", { batch: "EXPIRED", expiry: ymd(-1) });
     const sale = await w.cashSale(w.cashier, w.s1.id, w.regs.r1.id, [{ variant_id: v.id, quantity: "3" }]);
-    const moves = await w.db.stockMovement.findMany({ where: { source_id: sale.id }, include: {} as any });
+    const moves = await w.db.stockMovement.findMany({ where: { source_id: sale.id } });
     const batches = await w.db.batch.findMany({ where: { id: { in: moves.map((m) => m.batch_id!) } } });
     const byBatch = Object.fromEntries(moves.map((m) => [batches.find((b) => b.id === m.batch_id)!.batch_number, m.quantity.toString()]));
     expect(byBatch).toEqual({ SOON: "-2", LATE: "-1" });

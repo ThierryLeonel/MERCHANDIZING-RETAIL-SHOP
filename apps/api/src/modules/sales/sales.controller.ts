@@ -103,8 +103,11 @@ export class SalesController {
   @Post("sales/quote") @HttpCode(200) @RequirePermissions("pos.sell")
   quote(@Auth() a: AuthContext, @Body() dto: QuoteDto) { return this.svc.quote(a, dto); }
 
-  @Get("sales") @RequirePermissions("pos.sell")
-  list(@Auth() a: AuthContext, @Query() q: SalesQuery) { return this.svc.listSales(a, q); }
+  /** Read access: cashiers (pos.sell) or report users (reports.view). */
+  private canRead(a: AuthContext) { if (!a.permissions.has("pos.sell") && !a.permissions.has("reports.view")) throw new DomainError("FORBIDDEN", "Missing permission: pos.sell or reports.view", 403); }
+
+  @Get("sales")
+  list(@Auth() a: AuthContext, @Query() q: SalesQuery) { this.canRead(a); return this.svc.listSales(a, q); }
 
   @Get("sales/lookup/:number") @RequirePermissions("pos.sell")
   async byNumber(@Auth() a: AuthContext, @Param("number") number: string) {
@@ -113,8 +116,8 @@ export class SalesController {
     return this.svc.getSale(a, s.id);
   }
 
-  @Get("sales/:id") @RequirePermissions("pos.sell")
-  get(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.getSale(a, id); }
+  @Get("sales/:id")
+  get(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { this.canRead(a); return this.svc.getSale(a, id); }
 
   @Post("sales/:id/payments") @Idempotent() @RequirePermissions("pos.sell")
   addPayment(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: PaymentDto) { return this.svc.addPayment(a, id, dto); }

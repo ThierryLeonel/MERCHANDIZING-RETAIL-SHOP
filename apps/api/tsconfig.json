@@ -7,7 +7,6 @@
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
     "outDir": "dist",
-    "rootDir": ".",
     "noEmit": true,
     "types": ["node", "vitest/globals"]
   },

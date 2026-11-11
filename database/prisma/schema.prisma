@@ -311,6 +311,10 @@ model UserSession {
   id                 String    @id @default(uuid()) @db.Uuid
   user_id            String    @db.Uuid
   refresh_token_hash String
+  /// Previous refresh hash, accepted for a short grace window after rotation
+  /// (concurrent refreshes from several tabs) without rotating again.
+  previous_refresh_hash String?
+  rotated_at         DateTime? @db.Timestamptz(6)
   user_agent         String?
   ip_address         String?
   created_at         DateTime  @default(now()) @db.Timestamptz(6)

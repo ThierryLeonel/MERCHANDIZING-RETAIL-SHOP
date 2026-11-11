@@ -10,6 +10,7 @@ import { config } from "../../config";
 
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
+const REFRESH_GRACE_MS = 30_000;
 
 export const hashPassword = (pw: string) => hash(pw, { memoryCost: 19456, timeCost: 2, parallelism: 1 }); // argon2id (OWASP baseline)
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -70,15 +71,22 @@ export class AuthService {
     if (!sid || !secret) throw new DomainError("REFRESH_INVALID", "Sign in again", 401);
     const session = await this.prisma.client.userSession.findUnique({ where: { id: sid } }).catch(() => null);
     if (!session || session.revoked_at || session.expires_at < new Date()) throw new DomainError("REFRESH_INVALID", "Sign in again", 401);
-    if (session.refresh_token_hash !== sha256(secret)) {
+    const presented = sha256(secret);
+    const user = await this.prisma.client.user.findUnique({ where: { id: session.user_id } });
+    if (!user || user.status !== "ACTIVE") throw new DomainError("USER_DISABLED", "User is disabled", 401);
+    if (session.refresh_token_hash !== presented) {
+      // Grace window: a concurrent request (another tab) already rotated this token moments ago.
+      // Issue an access token but do not rotate again or set a cookie (the browser already holds the newer one).
+      const inGrace = session.previous_refresh_hash === presented && session.rotated_at && Date.now() - session.rotated_at.getTime() < REFRESH_GRACE_MS;
+      if (inGrace) return { accessToken: await this.issueAccess(user.id, sid, user.business_id), refreshToken: null };
       await this.prisma.client.userSession.update({ where: { id: sid }, data: { revoked_at: new Date(), revoked_reason: "refresh token reuse detected" } });
       throw new DomainError("REFRESH_REUSED", "Session revoked for security. Sign in again.", 401);
     }
-    const user = await this.prisma.client.user.findUnique({ where: { id: session.user_id } });
-    if (!user || user.status !== "ACTIVE") throw new DomainError("USER_DISABLED", "User is disabled", 401);
     const next = randomBytes(48).toString("base64url");
-    await this.prisma.client.userSession.update({ where: { id: sid }, data: { refresh_token_hash: sha256(next), last_used_at: new Date() } });
-    return { accessToken: await this.issueAccess(user.id, sid, user.business_id), refreshToken: `${sid}.${next}` };
+    // Conditional rotation: only one concurrent request wins; losers fall back to the grace path.
+    const rotated = await this.prisma.client.userSession.updateMany({ where: { id: sid, refresh_token_hash: presented }, data: { refresh_token_hash: sha256(next), previous_refresh_hash: presented, rotated_at: new Date(), last_used_at: new Date() } });
+    if (rotated.count !== 1) return { accessToken: await this.issueAccess(user.id, sid, user.business_id), refreshToken: null };
+    return { accessToken: await this.issueAccess(user.id, sid, user.business_id), refreshToken: `${sid}.${next}` as string | null };
   }
 
   async revoke(auth: AuthContext, sessionId: string, reason: string) {
