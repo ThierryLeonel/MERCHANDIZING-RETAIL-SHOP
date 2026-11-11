@@ -26,6 +26,12 @@ SETUP_BUSINESS_NAME="Your Company" SETUP_OWNER_EMAIL=owner@example.com SETUP_OWN
 ```
 `setup:production` creates the business, roles, chart of accounts, posting rules, approval policies and the owner account (forced password change). It refuses to run if a business exists and never creates demo data or default credentials. Then, in the app: create branches, registers, users, tax rates (from official guidance), products, and post opening stock.
 
+## Single-service hosting (one `npm start`)
+Platforms that run one process per app (nginx in front, `npm start` at the repository root) work out of the box:
+- Build commands: `npm install -g pnpm@10.28.0` · `pnpm install --frozen-lockfile --prod=false` · `pnpm db:generate` · `pnpm run build`
+- Start: `npm start` → applies pending migrations (advisory-locked), then starts the API on `$PORT`, **serves the built web app from the same origin**, and runs the background worker in-process.
+- Options: `SERVE_WEB=false` (serve the web elsewhere), `RUN_WORKER=false` (run `pnpm start:worker` as a separate process instead).
+
 ## Processes
 | Process | Command | Notes |
 |---|---|---|
