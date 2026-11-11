@@ -16,8 +16,16 @@ import { Client } from "pg";
 
 export async function migrate(databaseUrl: string, opts: { reset?: boolean; quiet?: boolean } = {}) {
   const dir = join(__dirname, "..", "..", "..", "database", "migrations");
+  if (/^mysql|^mariadb/i.test(databaseUrl)) throw new Error("DATABASE_URL points to MySQL/MariaDB. Retail Suite requires PostgreSQL 14+ (16 recommended).");
   const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (e) {
+    const msg = (e as Error).message;
+    const host = (() => { try { const u = new URL(databaseUrl); return `${u.hostname}:${u.port || 5432}`; } catch { return "the configured host"; } })();
+    if (/invalid response/i.test(msg)) throw new Error(`The server at ${host} is not PostgreSQL (it may be MySQL/MariaDB or another service). Retail Suite requires PostgreSQL 14+ (16 recommended). Original error: ${msg}`);
+    throw new Error(`Cannot connect to PostgreSQL at ${host}: ${msg}`);
+  }
   const log = (m: string) => !opts.quiet && console.log(m);
   try {
     // Serialise concurrent runners (several instances starting at once).
