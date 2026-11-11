@@ -1,4 +1,3 @@
-import { D } from "../src/common/money";
 import { closeContext, makeWorld, World } from "./harness";
 
 let w: World;

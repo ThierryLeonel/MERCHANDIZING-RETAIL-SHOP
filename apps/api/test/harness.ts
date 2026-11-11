@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { INestApplication, INestApplicationContext } from "@nestjs/common";
+import { INestApplicationContext } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { randomUUID } from "node:crypto";
 import { AppModule } from "../src/app.module";
@@ -92,7 +92,7 @@ export async function makeWorld(opts: { pricesIncludeTax?: boolean } = {}) {
     return svc.purchasing.receive(keeper, { branch_id: branchId, purchase_order_id: po.id, lines: full.lines.map((l) => ({ purchase_order_line_id: l.id, variant_id: l.variant_id, qty_accepted: l.quantity.toString(), batch_number: extra.batch, expiry_date: extra.expiry, serial_numbers: extra.serials })) });
   };
   const accountantApprover = manager; // manager holds approve.purchase for S1
-  let openSessions: Record<string, string> = {};
+  const openSessions: Record<string, string> = {};
   const session = async (who: AuthContext, registerId: string, float = "0") => {
     if (!openSessions[who.userId]) openSessions[who.userId] = (await svc.finance.openSession(who, { register_id: registerId, opening_float: float })).id;
     return openSessions[who.userId];

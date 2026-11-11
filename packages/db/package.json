@@ -12,7 +12,8 @@
     "drift-check": "tsx tools/drift-check.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "erd": "tsx tools/erd.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

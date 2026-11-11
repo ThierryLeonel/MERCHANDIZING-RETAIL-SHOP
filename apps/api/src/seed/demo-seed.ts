@@ -8,7 +8,7 @@
  * (see documentation/accounting/policies.md), all demo activity is dated today.
  *
  *   pnpm seed:demo            # requires an EMPTY, migrated database
- *   pnpm seed:demo -- --reset # drops and re-migrates the dev database first
+ *   pnpm seed:demo --reset # drops and re-migrates the dev database first
  */
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
@@ -120,7 +120,7 @@ export async function runDemoSeed(app: INestApplicationContext, opts: { quiet?: 
   let barcodeSeq = 1000;
   const one = (sku: string, name: string, retail: string, extra: Partial<ProductInput["variants"][number]> = {}) => [{ sku, name, retail_price: retail, barcodes: [{ code: `61000000${++barcodeSeq}` }], reorder_point: "5", reorder_qty: "20", ...extra }];
   const variants = (prefix: string, base: string, retail: string, combos: { label: string; values: string[] }[], extra: Partial<ProductInput["variants"][number]> = {}) =>
-    combos.map((c, i) => ({ sku: `${prefix}-${c.label.replace(/[^A-Z0-9]/gi, "").toUpperCase()}`, name: `${base} ${c.label}`, retail_price: retail, attribute_value_ids: c.values, barcodes: [{ code: `62000000${++barcodeSeq}` }], reorder_point: "2", reorder_qty: "6", ...extra }));
+    combos.map((c) => ({ sku: `${prefix}-${c.label.replace(/[^A-Z0-9]/gi, "").toUpperCase()}`, name: `${base} ${c.label}`, retail_price: retail, attribute_value_ids: c.values, barcodes: [{ code: `62000000${++barcodeSeq}` }], reorder_point: "2", reorder_qty: "6", ...extra }));
   const sizesColours = (sizes: string[], colours: string[]) => sizes.flatMap((s) => colours.map((c) => ({ label: `${s} ${c}`, values: [SIZE[s], COLOUR[c]] })));
 
   const prods: Record<string, any> = {};
@@ -277,8 +277,8 @@ export async function runDemoSeed(app: INestApplicationContext, opts: { quiet?: 
   const finance = app.get(FinanceService);
   const sales = app.get(SalesService);
   const s1 = await finance.openSession(cashierAkwa, { register_id: regs.r1.id, opening_float: "25000" });
-  const s2 = await finance.openSession(cashier2Akwa, { register_id: regs.r2.id, opening_float: "20000" });
-  const s3 = await finance.openSession(cashierBona, { register_id: regs.r3.id, opening_float: "25000" });
+  await finance.openSession(cashier2Akwa, { register_id: regs.r2.id, opening_float: "20000" });
+  await finance.openSession(cashierBona, { register_id: regs.r3.id, opening_float: "25000" });
   let n = 0;
   const sell = async (who: AuthContext, branchId: string, registerId: string, items: { sku: string; qty: string; discount?: string; reason?: string; unit?: string; serial?: boolean }[], payments: (total: any) => any[], customerId?: string) => {
     const lines = [];
