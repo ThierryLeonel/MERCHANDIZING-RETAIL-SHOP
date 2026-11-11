@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "Integrated retail management (POS, inventory, purchasing, accounting) for a multi-branch merchandising business",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "db:generate": "pnpm --filter @retail/db generate",
     "db:migrate": "pnpm --filter @retail/db migrate",
@@ -19,7 +21,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm --filter @retail/api test",
-    "test:e2e": "playwright test -c tests/end-to-end/playwright.config.ts"
+    "test:e2e": "playwright test -c tests/end-to-end/playwright.config.ts",
+    "start": "pnpm db:migrate && node apps/api/dist/main.js",
+    "start:worker": "node apps/api/dist/worker/main.js"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

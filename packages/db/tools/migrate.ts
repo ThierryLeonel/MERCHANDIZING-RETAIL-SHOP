@@ -20,6 +20,8 @@ export async function migrate(databaseUrl: string, opts: { reset?: boolean; quie
   await client.connect();
   const log = (m: string) => !opts.quiet && console.log(m);
   try {
+    // Serialise concurrent runners (several instances starting at once).
+    await client.query("SELECT pg_advisory_lock(727274)");
     if (opts.reset) {
       if (process.env.NODE_ENV === "production") throw new Error("Refusing to reset in production");
       await client.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
@@ -60,6 +62,7 @@ export async function migrate(databaseUrl: string, opts: { reset?: boolean; quie
     }
     log(count ? `${count} migration(s) applied.` : "Database is up to date.");
   } finally {
+    await client.query("SELECT pg_advisory_unlock(727274)").catch(() => {});
     await client.end();
   }
 }

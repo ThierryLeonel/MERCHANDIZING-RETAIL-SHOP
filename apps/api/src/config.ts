@@ -18,7 +18,7 @@ function jwtSecret(): string {
 
 export const config = {
   isProduction,
-  port: Number(env.API_PORT ?? 3000),
+  port: Number(env.PORT ?? env.API_PORT ?? 3000), // PORT is set by most hosting platforms
   corsOrigins: (env.CORS_ORIGINS ?? "http://localhost:5173").split(",").map((s) => s.trim()),
   jwtSecret: jwtSecret(),
   accessTtlSeconds: Number(env.ACCESS_TOKEN_TTL_SECONDS ?? 900),
