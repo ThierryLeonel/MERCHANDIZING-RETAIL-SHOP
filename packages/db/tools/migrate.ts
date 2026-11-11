@@ -13,6 +13,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
+import { resolveDatabaseUrl } from "../src/database-url";
 
 export async function migrate(databaseUrl: string, opts: { reset?: boolean; quiet?: boolean } = {}) {
   const dir = join(__dirname, "..", "..", "..", "database", "migrations");
@@ -76,7 +77,7 @@ export async function migrate(databaseUrl: string, opts: { reset?: boolean; quie
 }
 
 if (require.main === module) {
-  const url = process.env.DATABASE_URL;
-  if (!url) { console.error("DATABASE_URL is not set"); process.exit(1); }
+  const url = resolveDatabaseUrl();
+  if (!url) { console.error("No database configured: set DATABASE_URL or DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD"); process.exit(1); }
   migrate(url, { reset: process.argv.includes("--reset") }).catch((e) => { console.error(e.message); process.exit(1); });
 }

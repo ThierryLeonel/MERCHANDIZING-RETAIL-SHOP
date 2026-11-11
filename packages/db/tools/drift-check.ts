@@ -9,6 +9,7 @@ import { getDMMF } from "@prisma/internals";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
+import { resolveDatabaseUrl } from "../src/database-url";
 
 const TYPE_MAP: Record<string, string[]> = {
   String: ["text", "uuid", "character varying"], Int: ["integer"], Boolean: ["boolean"], Json: ["jsonb"],
@@ -50,7 +51,7 @@ export async function driftCheck(databaseUrl: string): Promise<string[]> {
 }
 
 if (require.main === module) {
-  driftCheck(process.env.DATABASE_URL!).then((p) => {
+  driftCheck(resolveDatabaseUrl()!).then((p) => {
     if (p.length) { console.error(`Schema drift detected (${p.length}):\n` + p.join("\n")); process.exit(1); }
     console.log("No drift: database matches database/prisma/schema.prisma");
   }).catch((e) => { console.error(e); process.exit(1); });
