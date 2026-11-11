@@ -555,10 +555,12 @@ export class SalesService {
         if (!q.gt(0) || q.greaterThan(remaining)) throw invalid("RETURN_EXCEEDS_SOLD", `${sl.sku}: can return at most ${remaining} more`, { sale_line_id: sl.id, remaining: remaining.toString() });
         const final = q.equals(remaining);
         const priorReturns = await tx.salesReturnLine.aggregate({ where: { sale_line_id: sl.id }, _sum: { net_refund: true, tax_refund: true, cost_amount: true } });
-        const share = (total: Dec, prior: Dec | null) => (final ? total.minus(prior ?? 0) : money(total.times(q).div(sl.quantity_base), dec));
-        const net = share(D(sl.net_amount), D(priorReturns._sum.net_refund ?? 0));
-        const tax = share(D(sl.tax_amount), D(priorReturns._sum.tax_refund ?? 0));
-        const cost = share(D(sl.cost_amount), D(priorReturns._sum.cost_amount ?? 0));
+        // include shares already taken by earlier lines of THIS return for the same sale line
+        const pend = lines.filter((x) => x.saleLine.id === sl.id);
+        const share = (total: Dec, prior: Dec, pending: Dec) => (final ? total.minus(prior).minus(pending) : money(total.times(q).div(sl.quantity_base), dec));
+        const net = share(D(sl.net_amount), D(priorReturns._sum.net_refund ?? 0), sum(pend, (x) => x.net));
+        const tax = share(D(sl.tax_amount), D(priorReturns._sum.tax_refund ?? 0), sum(pend, (x) => x.tax));
+        const cost = share(D(sl.cost_amount), D(priorReturns._sum.cost_amount ?? 0), sum(pend, (x) => x.cost));
         const locationId = rl.condition === "SELLABLE" ? sale.location_id : rl.condition === "NON_RESTOCKABLE" ? null : rl.condition === "DAMAGED" ? (damaged?.id ?? null) : (quarantine?.id ?? null);
         if (rl.condition !== "NON_RESTOCKABLE" && !locationId) throw invalid("LOCATION_MISSING", "Configure QUARANTINE and DAMAGED locations for this branch");
         lines.push({ saleLine: sl, q, net, tax, cost, condition: rl.condition, notes: rl.inspection_notes, locationId });

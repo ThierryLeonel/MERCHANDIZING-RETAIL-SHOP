@@ -95,13 +95,13 @@ CREATE TRIGGER trg_journal_period BEFORE INSERT ON journal_entries
 CREATE OR REPLACE FUNCTION fn_journal_entry_immutable() RETURNS trigger AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Journal entries cannot be deleted; post a reversal' USING ERRCODE = 'restrict_violation';
+    RAISE EXCEPTION 'Journal entries cannot be deleted; post a reversal';
   END IF;
   IF OLD.status = 'POSTED' AND NEW.status = 'REVERSED' AND OLD.reversed_by_id IS NULL AND NEW.reversed_by_id IS NOT NULL
      AND NEW.total_debit = OLD.total_debit AND NEW.entry_date = OLD.entry_date AND NEW.number = OLD.number THEN
     RETURN NEW;
   END IF;
-  RAISE EXCEPTION 'Posted journal entries are immutable; post a reversal' USING ERRCODE = 'restrict_violation';
+  RAISE EXCEPTION 'Posted journal entries are immutable; post a reversal';
 END $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_journal_entry_immutable BEFORE UPDATE OR DELETE ON journal_entries
@@ -110,7 +110,7 @@ CREATE TRIGGER trg_journal_entry_immutable BEFORE UPDATE OR DELETE ON journal_en
 -- Append-only tables.
 CREATE OR REPLACE FUNCTION fn_append_only() RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION '% is append-only', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+  RAISE EXCEPTION '% is append-only', TG_TABLE_NAME;
 END $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_journal_lines_append_only BEFORE UPDATE OR DELETE ON journal_lines
@@ -128,7 +128,7 @@ CREATE OR REPLACE FUNCTION fn_sale_protect() RETURNS trigger AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD.status = 'COMPLETED' THEN
-      RAISE EXCEPTION 'Completed sales cannot be deleted' USING ERRCODE = 'restrict_violation';
+      RAISE EXCEPTION 'Completed sales cannot be deleted';
     END IF;
     RETURN OLD;
   END IF;
@@ -136,7 +136,7 @@ BEGIN
        NEW.status <> OLD.status OR NEW.total <> OLD.total OR NEW.net_amount <> OLD.net_amount
     OR NEW.tax_total <> OLD.tax_total OR NEW.cost_total <> OLD.cost_total OR NEW.number <> OLD.number
     OR NEW.completed_at IS DISTINCT FROM OLD.completed_at OR NEW.journal_entry_id IS DISTINCT FROM OLD.journal_entry_id) THEN
-    RAISE EXCEPTION 'Completed sales are immutable; use a return or reversal' USING ERRCODE = 'restrict_violation';
+    RAISE EXCEPTION 'Completed sales are immutable; use a return or reversal';
   END IF;
   RETURN NEW;
 END $$ LANGUAGE plpgsql;
