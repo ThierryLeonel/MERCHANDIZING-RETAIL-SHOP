@@ -13,12 +13,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
-import { resolveDatabaseUrl } from "../src/database-url";
+import { pgConnectionConfig, resolveDatabaseUrl } from "../src/database-url";
 
 export async function migrate(databaseUrl: string, opts: { reset?: boolean; quiet?: boolean } = {}) {
   const dir = join(__dirname, "..", "..", "..", "database", "migrations");
   if (/^mysql|^mariadb/i.test(databaseUrl)) throw new Error("DATABASE_URL points to MySQL/MariaDB. Retail Suite requires PostgreSQL 14+ (16 recommended).");
-  const client = new Client({ connectionString: databaseUrl });
+  const client = new Client(pgConnectionConfig(databaseUrl));
   try {
     await client.connect();
   } catch (e) {

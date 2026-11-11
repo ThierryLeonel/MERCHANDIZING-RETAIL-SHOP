@@ -9,7 +9,7 @@ import { getDMMF } from "@prisma/internals";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
-import { resolveDatabaseUrl } from "../src/database-url";
+import { pgConnectionConfig, resolveDatabaseUrl } from "../src/database-url";
 
 const TYPE_MAP: Record<string, string[]> = {
   String: ["text", "uuid", "character varying"], Int: ["integer"], Boolean: ["boolean"], Json: ["jsonb"],
@@ -18,7 +18,7 @@ const TYPE_MAP: Record<string, string[]> = {
 
 export async function driftCheck(databaseUrl: string): Promise<string[]> {
   const dmmf = await getDMMF({ datamodel: readFileSync(join(__dirname, "..", "..", "..", "database", "prisma", "schema.prisma"), "utf8") });
-  const c = new Client({ connectionString: databaseUrl });
+  const c = new Client(pgConnectionConfig(databaseUrl));
   await c.connect();
   const cols = (await c.query(`SELECT table_name, column_name, data_type, udt_name, is_nullable, numeric_precision, numeric_scale
     FROM information_schema.columns WHERE table_schema='public'`)).rows;

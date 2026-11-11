@@ -29,3 +29,28 @@ function withSsl(url: string, env: NodeJS.ProcessEnv): string {
   if (mode) u.searchParams.set("sslmode", mode);
   return u.toString();
 }
+
+/**
+ * pg connection options for a URL. Laravel Cloud's `*.pg.laravel.cloud`
+ * hostnames front Neon, whose certificate is issued for `*.neon.tech`: the
+ * certificate chain is still fully verified, but the hostname check accepts
+ * that Neon certificate for those hosts only. sslmode is moved from the URL
+ * into the ssl option (pg would otherwise let the URL override it).
+ */
+export function pgConnectionConfig(url: string): { connectionString: string; ssl?: boolean | import("node:tls").ConnectionOptions } {
+  let u: URL;
+  try { u = new URL(url); } catch { return { connectionString: url }; }
+  const mode = u.searchParams.get("sslmode");
+  if (!mode || !/\.pg\.laravel\.cloud$/i.test(u.hostname) || mode === "disable" || mode === "no-verify") return { connectionString: url };
+  u.searchParams.delete("sslmode");
+  return { connectionString: u.toString(), ssl: { rejectUnauthorized: true, servername: u.hostname, checkServerIdentity: laravelCloudIdentity } };
+}
+
+export function laravelCloudIdentity(host: string, cert: import("node:tls").PeerCertificate): Error | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const tls = require("node:tls") as typeof import("node:tls");
+  const err = tls.checkServerIdentity(host, cert);
+  if (!err) return undefined;
+  const alt = cert.subjectaltname ?? "";
+  return /\.pg\.laravel\.cloud\.?$/i.test(host) && /DNS:\*\.[a-z0-9.-]+\.neon\.tech/i.test(alt) ? undefined : err;
+}
