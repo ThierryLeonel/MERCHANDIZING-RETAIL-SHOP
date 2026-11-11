@@ -1,0 +1,28 @@
+{
+  "name": "retail-suite",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Integrated retail management (POS, inventory, purchasing, accounting) for a multi-branch merchandising business",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "db:generate": "pnpm --filter @retail/db generate",
+    "db:migrate": "pnpm --filter @retail/db migrate",
+    "db:check": "pnpm --filter @retail/db drift-check",
+    "db:reset": "pnpm --filter @retail/db reset",
+    "seed:demo": "pnpm --filter @retail/api seed:demo",
+    "setup:production": "pnpm --filter @retail/api setup:production",
+    "dev:api": "pnpm --filter @retail/api dev",
+    "dev:worker": "pnpm --filter @retail/api worker",
+    "dev:web": "pnpm --filter @retail/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter @retail/api test",
+    "test:e2e": "playwright test -c tests/end-to-end/playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "typescript": "5.9.3"
+  }
+}

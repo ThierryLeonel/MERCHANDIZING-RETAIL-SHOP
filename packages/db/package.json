@@ -1,0 +1,30 @@
+{
+  "name": "@retail/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/src/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "PRISMA_SCHEMA_ENGINE_BINARY=${PRISMA_SCHEMA_ENGINE_BINARY:-/bin/true} prisma generate --schema ../../database/prisma/schema.prisma",
+    "ddl": "tsx tools/generate-ddl.ts",
+    "migrate": "tsx tools/migrate.ts",
+    "reset": "tsx tools/migrate.ts --reset",
+    "drift-check": "tsx tools/drift-check.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@prisma/internals": "7.10.1",
+    "@types/pg": "8.15.6",
+    "dotenv": "17.2.3",
+    "prisma": "7.10.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

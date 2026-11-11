@@ -1,0 +1,41 @@
+# Local infrastructure. Run: docker compose up -d
+# (Not executed in the build environment, which had no Docker daemon.)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: retail_dev
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["app"]
+    build: { context: ., dockerfile: infrastructure/docker/api.Dockerfile }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/retail_dev
+    ports: ["3000:3000"]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  worker:
+    profiles: ["app"]
+    build: { context: ., dockerfile: infrastructure/docker/api.Dockerfile }
+    command: ["node", "apps/api/dist/worker/main.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/retail_dev
+    depends_on: { postgres: { condition: service_healthy } }
+
+volumes:
+  pgdata:

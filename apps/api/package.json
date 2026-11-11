@@ -1,0 +1,53 @@
+{
+  "name": "@retail/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node -r @swc-node/register --watch src/main.ts",
+    "start": "node dist/main.js",
+    "worker": "node -r @swc-node/register src/worker/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "seed:demo": "node -r @swc-node/register src/seed/demo-seed.ts",
+    "setup:production": "node -r @swc-node/register src/seed/production-setup.ts",
+    "openapi": "node -r @swc-node/register src/openapi-export.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.9",
+    "@nestjs/core": "^11.2.9",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/platform-express": "^11.2.9",
+    "@nestjs/swagger": "^11.4.8",
+    "@nestjs/throttler": "^6.7.1",
+    "@node-rs/argon2": "^2.2.2",
+    "@retail/api-contracts": "workspace:*",
+    "@retail/db": "workspace:*",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "17.2.3",
+    "helmet": "^8.3.0",
+    "multer": "^2.5.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@swc-node/register": "^1.12.1",
+    "@swc/core": "^1.16.22",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^22.20.5",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^9.39.5",
+    "supertest": "^7.3.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.72.2",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^3.2.7"
+  }
+}
