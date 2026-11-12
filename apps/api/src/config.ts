@@ -8,10 +8,16 @@ for (const p of [resolve(__dirname, "../../../.env"), resolve(process.cwd(), ".e
 const env = process.env;
 const isProduction = env.NODE_ENV === "production";
 
+/**
+ * Token signing secret: JWT_SECRET, else APP_KEY (generated automatically by
+ * Laravel Cloud and similar platforms). Must be >= 32 characters in production.
+ */
 function jwtSecret(): string {
-  const s = env.JWT_SECRET ?? "";
-  if (isProduction && (s.length < 32 || s.startsWith("dev-only"))) {
-    throw new Error("JWT_SECRET must be set to a strong secret (>= 32 chars) in production");
+  const strong = (v?: string) => !!v && v.trim().length >= 32 && !v.startsWith("dev-only");
+  const s = ([env.JWT_SECRET, env.APP_KEY].find(strong) ?? env.JWT_SECRET ?? "").trim();
+  if (isProduction && !strong(s)) {
+    const seen = Object.keys(env).filter((k) => /SECRET|KEY|JWT/i.test(k)).sort().join(", ") || "none";
+    throw new Error(`Set JWT_SECRET (or APP_KEY) to a random string of at least 32 characters for production. Related variables visible to the app: ${seen}`);
   }
   return s || "dev-only-insecure-secret-change-me-000000";
 }
