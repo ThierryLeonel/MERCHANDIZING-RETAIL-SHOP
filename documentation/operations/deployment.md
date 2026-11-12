@@ -36,7 +36,7 @@ Platforms that run one process per app (nginx in front, `npm start` at the repos
 | Process | Command | Notes |
 |---|---|---|
 | API | `node apps/api/dist/main.js` | Stateless; run ≥ 2 behind the proxy |
-| Worker | `node apps/api/dist/worker/main.js` | Outbox + payment timeouts; safe to run several (SKIP LOCKED) |
+| Worker | `node apps/api/dist/worker/index.js` | Outbox + payment timeouts; safe to run several (SKIP LOCKED) |
 | Web | static files `apps/web/dist` | Proxy `/api` to the API |
 
 ## Health and monitoring

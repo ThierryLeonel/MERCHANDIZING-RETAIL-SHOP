@@ -37,11 +37,11 @@ export function startWorkerLoop(app: INestApplicationContext) {
   return { stop: async () => { stopping = true; await done; } };
 }
 
-async function main() {
+export async function runStandaloneWorker() {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ["log", "warn", "error"] });
   const w = startWorkerLoop(app);
   const shutdown = async () => { await w.stop(); await app.close(); process.exit(0); };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 }
-if (require.main === module) main();
+

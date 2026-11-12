@@ -23,7 +23,7 @@
     "test": "pnpm --filter @retail/api test",
     "test:e2e": "playwright test -c tests/end-to-end/playwright.config.ts",
     "start": "pnpm db:migrate && node apps/api/dist/main.js",
-    "start:worker": "node apps/api/dist/worker/main.js"
+    "start:worker": "node apps/api/dist/worker/index.js"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

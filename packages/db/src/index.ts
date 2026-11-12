@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from "../generated/client";
 import { pgConnectionConfig, resolveDatabaseUrl } from "./database-url";
 
 export { pgConnectionConfig, resolveDatabaseUrl };
+export { ensureRuntimeSecrets } from "./runtime-secrets";
 
 export * from "../generated/client";
 export { Prisma };

@@ -31,7 +31,7 @@ services:
   worker:
     profiles: ["app"]
     build: { context: ., dockerfile: infrastructure/docker/api.Dockerfile }
-    command: ["node", "apps/api/dist/worker/main.js"]
+    command: ["node", "apps/api/dist/worker/index.js"]
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/retail_dev

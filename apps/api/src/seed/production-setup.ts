@@ -6,12 +6,12 @@
  *   supplied at run time (SETUP_OWNER_PASSWORD) and must be changed at first sign-in.
  */
 import "reflect-metadata";
-import { createPrismaClient } from "@retail/db";
-import "../config";
-import { validatePasswordStrength } from "../modules/auth/auth.service";
-import { createBranchWithDefaults, createUser, setupBusiness } from "./business-setup";
+import { createPrismaClient, ensureRuntimeSecrets } from "@retail/db";
 
 async function main() {
+  await ensureRuntimeSecrets(() => {});
+  const { validatePasswordStrength } = await import("../modules/auth/auth.service");
+  const { createBranchWithDefaults, createUser, setupBusiness } = await import("./business-setup");
   const name = process.env.SETUP_BUSINESS_NAME?.trim();
   const email = process.env.SETUP_OWNER_EMAIL?.trim().toLowerCase();
   const password = process.env.SETUP_OWNER_PASSWORD ?? "";
