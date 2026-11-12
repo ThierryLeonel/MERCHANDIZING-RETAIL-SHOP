@@ -22,7 +22,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm --filter @retail/api test",
     "test:e2e": "playwright test -c tests/end-to-end/playwright.config.ts",
-    "start": "pnpm db:migrate && node apps/api/dist/main.js",
+    "start": "node apps/api/dist/main.js",
     "start:worker": "node apps/api/dist/worker/index.js"
   },
   "devDependencies": {

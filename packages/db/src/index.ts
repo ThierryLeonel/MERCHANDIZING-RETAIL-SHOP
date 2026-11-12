@@ -4,6 +4,7 @@ import { pgConnectionConfig, resolveDatabaseUrl } from "./database-url";
 
 export { pgConnectionConfig, resolveDatabaseUrl };
 export { ensureRuntimeSecrets } from "./runtime-secrets";
+export { migrate } from "./migrate";
 
 export * from "../generated/client";
 export { Prisma };

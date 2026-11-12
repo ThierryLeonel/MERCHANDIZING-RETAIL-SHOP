@@ -29,13 +29,14 @@ SETUP_BUSINESS_NAME="Your Company" SETUP_OWNER_EMAIL=owner@example.com SETUP_OWN
 ## Single-service hosting (one `npm start`)
 Platforms that run one process per app (nginx in front, `npm start` at the repository root) work out of the box:
 - Build commands: `npm install -g pnpm@10.28.0` · `pnpm install --frozen-lockfile --prod=false` · `pnpm db:generate` · `pnpm run build`
-- Start: `npm start` → applies pending migrations (advisory-locked), then starts the API on `$PORT`, **serves the built web app from the same origin**, and runs the background worker in-process.
-- Options: `SERVE_WEB=false` (serve the web elsewhere), `RUN_WORKER=false` (run `pnpm start:worker` as a separate process instead).
+- Start: `npm start` (= `node apps/api/dist/main.js`) → opens `$PORT` immediately on all IPv6 + IPv4 addresses (answering `503 {"status":"starting"}` so start-up checks can connect), applies pending migrations (advisory-locked), then serves the API, **serves the built web app from the same origin**, and runs the background worker in-process.
+- Options: `SERVE_WEB=false` (serve the web elsewhere), `RUN_WORKER=false` (run `pnpm start:worker` as a separate process instead), `MIGRATE_ON_START=false` (run `pnpm db:migrate` yourself), `HOST=<address>` (bind a specific address).
+- Health: `GET /api/v1/health` returns 200 only once the app is ready (503 while starting).
 
 ## Processes
 | Process | Command | Notes |
 |---|---|---|
-| API | `node apps/api/dist/main.js` | Stateless; run ≥ 2 behind the proxy |
+| API | `node apps/api/dist/main.js` | Stateless; run ≥ 2 behind the proxy; migrates on start unless `MIGRATE_ON_START=false` |
 | Worker | `node apps/api/dist/worker/index.js` | Outbox + payment timeouts; safe to run several (SKIP LOCKED) |
 | Web | static files `apps/web/dist` | Proxy `/api` to the API |
 

@@ -1,12 +1,18 @@
 import { Logger } from "@nestjs/common";
 import express from "express";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createApp } from "./bootstrap";
 import { config } from "./config";
 import { startWorkerLoop } from "./worker/main";
 
-export async function startServer() {
+/**
+ * Boots the API. With `httpServer` (already listening, opened by main.ts), the
+ * app is initialised without binding a new port and its request handler is
+ * returned for main.ts to install; otherwise the app listens on config.port.
+ */
+export async function startServer(httpServer?: Server): Promise<(req: IncomingMessage, res: ServerResponse) => void> {
   const app = await createApp();
   // Single-service deployment: serve the built web app from the same origin as /api
   // (required for the SameSite refresh cookie). Disable with SERVE_WEB=false.
@@ -21,10 +27,17 @@ export async function startServer() {
     });
     Logger.log(`Serving web app from ${webDist}`, "Bootstrap");
   }
-  await app.listen(config.port, "0.0.0.0");
-  Logger.log(`API listening on port ${config.port} (/api/v1, docs /api/docs)`, "Bootstrap");
+  const instance = app.getHttpAdapter().getInstance();
+  if (httpServer) {
+    await app.init();
+    process.once("SIGTERM", () => httpServer.close());
+  } else {
+    await app.listen(config.port); // Node default: all IPv6 + IPv4 addresses where available
+  }
+  Logger.log(`API ready on port ${config.port} (/api/v1, docs /api/docs)`, "Bootstrap");
   if (process.env.RUN_WORKER !== "false") {
     const worker = startWorkerLoop(app);
     process.on("SIGTERM", () => void worker.stop());
   }
+  return instance;
 }
