@@ -514,6 +514,25 @@
         ]
       }
     },
+    "/api/v1/catalogue/categories": {
+      "get": {
+        "operationId": "CatalogueController_categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
     "/api/v1/catalogue/{kind}": {
       "post": {
         "operationId": "CatalogueController_createRef",
@@ -539,6 +558,52 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
+    "/api/v1/catalogue/{kind}/{id}": {
+      "patch": {
+        "operationId": "CatalogueController_updateRef",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRefDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -4698,6 +4763,10 @@
         "properties": {}
       },
       "RefDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateRefDto": {
         "type": "object",
         "properties": {}
       },

@@ -151,10 +151,13 @@ export class SalesService {
         let unitPrice = money(resolved.unitPrice, Math.max(dec, 2));
         let source = resolved.source;
         let needsOverrideApproval = false;
+        const negotiable = variant.product.negotiable_price;
         if (l.override_price != null) {
-          assertCan(auth, "pos.price_override", "Price overrides require pos.price_override");
+          // Negotiable (bargain) items: any cashier may enter the agreed price; others need pos.price_override.
+          if (!negotiable) assertCan(auth, "pos.price_override", "Price overrides require pos.price_override");
           unitPrice = money(l.override_price, Math.max(dec, 2));
-          source = "MANUAL_OVERRIDE";
+          if (!unitPrice.gt(0)) throw invalid("INVALID_PRICE", `${variant.sku}: enter a price above zero`);
+          source = negotiable ? "NEGOTIATED" : "MANUAL_OVERRIDE";
         }
         const gross = money(unitPrice.times(q), dec);
         let discount = ZERO;
@@ -166,7 +169,13 @@ export class SalesService {
           if (!l.discount_reason?.trim()) throw invalid("DISCOUNT_REASON_REQUIRED", `Enter a reason for the discount on ${variant.sku}`);
         }
         const effectiveUnit = gross.minus(discount).div(q);
-        if (resolved.minPrice && effectiveUnit.lessThan(resolved.minPrice)) needsOverrideApproval = true;
+        if (resolved.minPrice && effectiveUnit.lessThan(resolved.minPrice)) {
+          // Bargaining has a hard floor: a negotiable item can never be sold below its minimum price.
+          if (negotiable) {
+            throw invalid("BELOW_MIN_PRICE", `${variant.sku}: ${effectiveUnit.toDecimalPlaces(dec)} per ${unitCode} is below the minimum price of ${resolved.minPrice.toDecimalPlaces(dec)}`, { variant_id: variant.id, line_index: lineNo, min_price: resolved.minPrice.toDecimalPlaces(dec).toString() });
+          }
+          needsOverrideApproval = true;
+        }
         const discountPct = gross.isZero() ? ZERO : discount.div(gross).times(100);
         const needsDiscountApproval = discount.gt(0) && !!discountPolicy?.enabled && discountPolicy.threshold_percent != null && discountPct.greaterThan(discountPolicy.threshold_percent);
         let approvalId: string | null = null;
@@ -201,7 +210,7 @@ export class SalesService {
       if (opts.dryRun) {
         return {
           quote: {
-            lines: priced.map((p: any) => ({ variant_id: p.variant_id, sku: p.sku, description: p.description, unit_code: p.unit_code, quantity: p.quantity, unit_price: p.unit_price, list_price: p.list_price, price_source: p.price_source, min_price: p._min, discount_amount: p.discount_amount, net_amount: p.net_amount, tax_percent: p.tax_percent, tax_amount: p.tax_amount, line_total: p.line_total, needs_approval: p._pending })),
+            lines: priced.map((p: any) => ({ variant_id: p.variant_id, sku: p.sku, description: p.description, unit_code: p.unit_code, quantity: p.quantity, unit_price: p.unit_price, list_price: p.list_price, price_source: p.price_source, min_price: p._min, negotiable_price: p._variant.product.negotiable_price, discount_amount: p.discount_amount, net_amount: p.net_amount, tax_percent: p.tax_percent, tax_amount: p.tax_amount, line_total: p.line_total, needs_approval: p._pending })),
             gross_amount: sum(priced, (p) => p.gross_amount as Dec), discount_total: sum(priced, (p) => p.discount_amount as Dec), net_amount: netTotal, tax_total: taxTotal, total, price_list_kind: kind,
           },
         } as any;

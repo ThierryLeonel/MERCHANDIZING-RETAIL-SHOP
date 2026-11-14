@@ -1,4 +1,4 @@
-import { Banknote, CreditCard, Minus, Pause, Percent, Play, Plus, Printer, RotateCcw, ScanLine, Search, Smartphone, Trash2, User, Wallet, X } from "lucide-react";
+import { Banknote, CreditCard, HandCoins, Minus, Pause, Percent, Play, Plus, Printer, RotateCcw, ScanLine, Search, Smartphone, Trash2, User, Wallet, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useApprovalFlow } from "../../components/approval";
@@ -12,6 +12,8 @@ import { Receipt } from "./Receipt";
 interface CartLine {
   key: string; variant_id: string; sku: string; name: string; quantity: string; unit_id?: string; unit_code: string;
   discount_amount?: string; discount_reason?: string; approval_request_id?: string; serial_number_id?: string; serial?: string; available: string | null;
+  /** Agreed (bargained) or overridden unit price; the server re-validates it against the minimum price. */
+  override_price?: string; negotiable?: boolean; bulk?: boolean;
 }
 interface Tender { method: string; amount: string; amount_tendered?: string; reference?: string; payer_phone?: string; approval_request_id?: string }
 
@@ -75,6 +77,7 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
   const [payOpen, setPayOpen] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [discountFor, setDiscountFor] = useState<CartLine | null>(null);
+  const [priceFor, setPriceFor] = useState<{ line: CartLine; index: number } | null>(null);
   const [serialFor, setSerialFor] = useState<any>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
@@ -88,9 +91,9 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
     setScanErr(null);
     setCart((c) => {
       const unitId = opts.unit?.unit_id ?? undefined;
-      const existing = !item.track_serials && c.find((l) => l.variant_id === item.variant_id && l.unit_id === unitId && !l.discount_amount);
+      const existing = !item.track_serials && c.find((l) => l.variant_id === item.variant_id && l.unit_id === unitId && !l.discount_amount && !l.override_price);
       if (existing) return c.map((l) => (l === existing ? { ...l, quantity: String(Number(l.quantity) + 1) } : l));
-      return [...c, { key: crypto.randomUUID(), variant_id: item.variant_id, sku: item.sku, name: item.name, quantity: "1", unit_id: unitId, unit_code: opts.unit?.unit_code ?? item.base_unit_code, available: item.available, serial_number_id: opts.serial?.id, serial: opts.serial?.serial }];
+      return [...c, { key: crypto.randomUUID(), variant_id: item.variant_id, sku: item.sku, name: item.name, quantity: "1", unit_id: unitId, unit_code: opts.unit?.unit_code ?? item.base_unit_code, available: item.available, serial_number_id: opts.serial?.id, serial: opts.serial?.serial, negotiable: !!item.negotiable_price, bulk: item.product_type === "BULK" }];
     });
     setTimeout(() => scanRef.current?.focus(), 0);
   }, []);
@@ -107,11 +110,14 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
   };
 
   // Server-side pricing: every cart change is re-quoted by the backend.
-  const quoteBody = useMemo(() => ({ branch_id: branchId, register_id: session.register_id, customer_id: customer?.id, lines: cart.map((l) => ({ variant_id: l.variant_id, quantity: l.quantity, unit_id: l.unit_id, discount_amount: l.discount_amount, discount_reason: l.discount_reason, approval_request_id: l.approval_request_id, serial_number_id: l.serial_number_id })) }), [cart, customer, branchId, session.register_id]);
+  const quoteBody = useMemo(() => ({ branch_id: branchId, register_id: session.register_id, customer_id: customer?.id, lines: cart.map((l) => ({ variant_id: l.variant_id, quantity: l.quantity, unit_id: l.unit_id, discount_amount: l.discount_amount, discount_reason: l.discount_reason, approval_request_id: l.approval_request_id, serial_number_id: l.serial_number_id, override_price: l.override_price })) }), [cart, customer, branchId, session.register_id]);
+  // The quote shown must match the current cart before payment can start (no stale totals).
+  const [quotedBody, setQuotedBody] = useState<unknown>(null);
+  const quoteCurrent = quotedBody === quoteBody;
   useEffect(() => {
-    if (!cart.length) { setQuote(null); setQuoteErr(null); return; }
+    if (!cart.length) { setQuote(null); setQuoteErr(null); setQuotedBody(null); return; }
     const ctrl = new AbortController();
-    const h = setTimeout(() => api("/sales/quote", { body: quoteBody, signal: ctrl.signal }).then((q) => { setQuote(q); setQuoteErr(null); }).catch((e) => e.name !== "AbortError" && setQuoteErr(e)), 200);
+    const h = setTimeout(() => api("/sales/quote", { body: quoteBody, signal: ctrl.signal }).then((q) => { setQuote(q); setQuoteErr(null); setQuotedBody(quoteBody); }).catch((e) => { if (e.name !== "AbortError") { setQuoteErr(e); setQuotedBody(quoteBody); } }), 200);
     return () => { clearTimeout(h); ctrl.abort(); };
   }, [quoteBody, cart.length]);
 
@@ -148,6 +154,7 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
             {(search.length >= 2 ? results.data : shortcuts.data)?.map((p) => (
               <button key={p.variant_id} onClick={() => addItem(p)} className="flex min-h-24 flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xs hover:border-brand-600 hover:shadow-sm active:scale-[.99]">
                 <div className="line-clamp-2 text-sm font-medium">{p.name}</div>
+                {(p.negotiable_price || p.product_type === "BULK") && <div className="mt-1 flex gap-1">{p.product_type === "BULK" && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">per {p.base_unit_code}</span>}{p.negotiable_price && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">Bargain</span>}</div>}
                 <div className="mt-2 flex items-end justify-between gap-2">
                   <span className="num text-sm font-semibold text-brand-800">{money(p.unit_price)}</span>
                   {p.available !== null && <span className={cx("text-xs", Number(p.available) <= 0 ? "text-red-600" : "text-slate-500")}>{qty(p.available)} left</span>}
@@ -188,14 +195,15 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
                 return (
                   <li key={l.key} className="px-4 py-2.5">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0"><div className="truncate text-sm font-medium">{l.name}</div><div className="text-xs text-slate-500">{l.sku}{l.serial && ` · SN ${l.serial}`} · {q ? money(q.unit_price) : "…"}/{l.unit_code}</div></div>
+                      <div className="min-w-0"><div className="truncate text-sm font-medium">{l.name}</div><div className="text-xs text-slate-500">{l.sku}{l.serial && ` · SN ${l.serial}`} · {q && l.override_price && q.list_price !== q.unit_price && <span className="mr-1 line-through">{money(q.list_price)}</span>}{q ? money(q.unit_price) : "…"}/{l.unit_code}{l.override_price && l.negotiable && <span className="ml-1 text-amber-700">agreed</span>}</div></div>
                       <div className="num text-right text-sm font-semibold">{q ? money(q.line_total) : "…"}</div>
                     </div>
                     <div className="mt-1.5 flex items-center gap-1.5">
                       <Button size="sm" variant="secondary" aria-label="Decrease" disabled={!!l.serial_number_id || Number(l.quantity) <= 1} onClick={() => setQty(l.key, String(Number(l.quantity) - 1))}><Minus className="h-3.5 w-3.5" /></Button>
                       <Input aria-label={`Quantity for ${l.name}`} className="h-8 w-16 text-center" inputMode="decimal" disabled={!!l.serial_number_id} value={l.quantity} onChange={(e) => setQty(l.key, e.target.value)} />
                       <Button size="sm" variant="secondary" aria-label="Increase" disabled={!!l.serial_number_id} onClick={() => setQty(l.key, String(Number(l.quantity) + 1))}><Plus className="h-3.5 w-3.5" /></Button>
-                      {can("pos.discount") && <Button size="sm" variant="ghost" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => setDiscountFor(l)}>{l.discount_amount ? `-${money(l.discount_amount, { symbol: false })}` : "Discount"}</Button>}
+                      {(l.negotiable || can("pos.price_override")) && <Button size="sm" variant={l.negotiable && !l.override_price ? "secondary" : "ghost"} icon={<HandCoins className="h-3.5 w-3.5" />} onClick={() => setPriceFor({ line: l, index: i })}>{l.override_price ? money(l.override_price, { symbol: false }) : l.negotiable ? "Bargain" : "Price"}</Button>}
+                      {can("pos.discount") && !l.negotiable && <Button size="sm" variant="ghost" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => setDiscountFor(l)}>{l.discount_amount ? `-${money(l.discount_amount, { symbol: false })}` : "Discount"}</Button>}
                       <Button size="sm" variant="ghost" className="ml-auto" aria-label={`Remove ${l.name}`} onClick={() => remove(l.key)}><X className="h-4 w-4" /></Button>
                     </div>
                     {q?.needs_approval && <div className="mt-1 text-xs text-amber-700">Needs {humanize(q.needs_approval).toLowerCase()} approval at payment</div>}
@@ -212,7 +220,7 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
           {Number(quote?.discount_total) > 0 && <Line label="Discounts" value={`-${quote.discount_total}`} />}
           <Line label="Tax" value={quote?.tax_total} />
           <div className="flex items-baseline justify-between pt-1 text-lg font-semibold"><span>Total</span><Money value={quote?.total ?? "0"} /></div>
-          <Button size="lg" className="mt-2 w-full" disabled={!cart.length || !quote || !!quoteErr} onClick={() => setPayOpen(true)} icon={<Banknote className="h-5 w-5" />}>Pay {quote ? money(quote.total) : ""}</Button>
+          <Button size="lg" className="mt-2 w-full" disabled={!cart.length || !quote || !!quoteErr || !quoteCurrent} onClick={() => setPayOpen(true)} icon={<Banknote className="h-5 w-5" />}>{quote && !quoteCurrent && !quoteErr ? "Updating total…" : `Pay ${quote ? money(quote.total) : ""}`}</Button>
         </div>
       </Card>
 
@@ -220,6 +228,8 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
         onDone={(sale) => { setPayOpen(false); setResult(sale); clear(); reloadSession(); }} />}
       {result && <SaleResult sale={result} onClose={() => { setResult(null); reloadSession(); scanRef.current?.focus(); }} onUpdate={setResult} />}
       {discountFor && <DiscountModal line={discountFor} onClose={() => setDiscountFor(null)} onSave={(d) => { setCart((c) => c.map((l) => (l.key === discountFor.key ? { ...l, ...d, approval_request_id: undefined } : l))); setDiscountFor(null); }} />}
+      {priceFor && <PriceModal line={priceFor.line} quoteLine={quoteLine(priceFor.index)} canOverride={can("pos.price_override")} onClose={() => setPriceFor(null)}
+        onSave={(price) => { setCart((c) => c.map((l) => (l.key === priceFor.line.key ? { ...l, override_price: price, approval_request_id: undefined } : l))); setPriceFor(null); setTimeout(() => scanRef.current?.focus(), 0); }} />}
       {serialFor && <SerialModal item={serialFor} branchId={branchId!} taken={cart.map((l) => l.serial_number_id).filter(Boolean) as string[]} onClose={() => setSerialFor(null)} onPick={(s) => { addItem(serialFor, { serial: s }); setSerialFor(null); }} />}
       {customerOpen && <CustomerPicker onClose={() => setCustomerOpen(false)} onPick={(c) => { setCustomer(c); setCustomerOpen(false); }} />}
       {heldOpen && <HeldCarts branchId={branchId!} onClose={() => setHeldOpen(false)} onRecall={(h) => { setCart(h.payload.cart ?? []); setCustomer(h.payload.customer ?? null); setHeldOpen(false); toast("Cart recalled — prices re-calculated"); }} />}
@@ -367,6 +377,48 @@ function DiscountModal({ line, onClose, onSave }: { line: CartLine; onClose: () 
         <Field label="Discount amount (line total)" hint="Discounts above your limit or below the minimum price need approval">{(id, d) => <Input id={id} aria-describedby={d} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
         <Field label="Reason" required>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * Agreed price for a line. Negotiable items: any cashier, floor = minimum price (hard).
+ * Other items: users with pos.price_override; below-minimum prices need approval at payment.
+ * The agreed amount can be typed per unit or as a total for the quantity (bulk goods).
+ */
+function PriceModal({ line, quoteLine, canOverride, onClose, onSave }: { line: CartLine; quoteLine: any; canOverride: boolean; onClose: () => void; onSave: (price: string | undefined) => void }) {
+  const { me } = useSession();
+  const decimals = Math.max(me?.business.currency_decimals ?? 0, 0);
+  const asking = quoteLine?.list_price ?? quoteLine?.unit_price;
+  const min = quoteLine?.min_price ? Number(quoteLine.min_price) : null;
+  const quantity = Number(line.quantity) || 0;
+  const [mode, setMode] = useState<"unit" | "total">("unit");
+  const [value, setValue] = useState(line.override_price ?? "");
+  const n = Number(value);
+  const unit = !value || !Number.isFinite(n) || n <= 0 ? null : mode === "unit" ? n : quantity > 0 ? Math.round((n / quantity) * 100) / 100 : null;
+  const below = unit != null && min != null && unit < min;
+  const blocked = below && (line.negotiable || !canOverride);
+  const fmt = (x: number) => x.toFixed(2).replace(/\.?0+$/, "");
+  return (
+    <Modal open onClose={onClose} title={`${line.negotiable ? "Agreed price" : "Override price"} — ${line.name}`} size="sm"
+      footer={<>{line.override_price && <Button variant="secondary" onClick={() => onSave(undefined)}>Use asking price</Button>}<Button disabled={unit == null || blocked} onClick={() => unit != null && onSave(fmt(unit))}>Apply</Button></>}>
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (unit != null && !blocked) onSave(fmt(unit)); }}>
+        <div className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-3 text-sm">
+          <div><div className="text-slate-500">Asking price</div><div className="num font-semibold">{asking ? money(asking) : "…"}<span className="text-xs font-normal text-slate-500">/{line.unit_code}</span></div></div>
+          <div><div className="text-slate-500">Lowest allowed</div><div className="num font-semibold text-amber-700">{min != null ? money(min) : "—"}<span className="text-xs font-normal text-slate-500">/{line.unit_code}</span></div></div>
+        </div>
+        {quantity !== 1 && (
+          <div className="flex gap-1 text-sm" role="radiogroup" aria-label="Enter price as">
+            <Button type="button" size="sm" variant={mode === "unit" ? "primary" : "secondary"} onClick={() => setMode("unit")}>Per {line.unit_code}</Button>
+            <Button type="button" size="sm" variant={mode === "total" ? "primary" : "secondary"} onClick={() => setMode("total")}>Total for {qty(line.quantity)} {line.unit_code}</Button>
+          </div>
+        )}
+        <Field label={mode === "unit" ? `Agreed price per ${line.unit_code}` : `Agreed total for ${qty(line.quantity)} ${line.unit_code}`}>{(id) => <Input id={id} autoFocus inputMode="decimal" className="h-12 text-lg" value={value} onChange={(e) => setValue(e.target.value)} />}</Field>
+        {unit != null && mode === "total" && <p className="text-xs text-slate-500">= {money(fmt(unit))} per {line.unit_code}{decimals === 0 ? " (line total is rounded to the currency)" : ""}</p>}
+        {unit != null && mode === "unit" && quantity !== 1 && <p className="text-xs text-slate-500">Line total ≈ {money(fmt(unit * quantity))}</p>}
+        {blocked && <p role="alert" className="text-sm text-red-600">Below the minimum price of {money(min!)} — this price cannot be accepted.</p>}
+        {below && !blocked && <p className="text-sm text-amber-700">Below the minimum price — a manager must approve at payment.</p>}
+      </form>
     </Modal>
   );
 }

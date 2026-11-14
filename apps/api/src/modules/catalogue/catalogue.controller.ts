@@ -9,7 +9,7 @@ import { D } from "../../common/money";
 import { PageQuery } from "../../common/pagination";
 import { PrismaService } from "../../common/prisma.service";
 import { IsDecimalValue } from "../../common/validators";
-import { CatalogueService } from "./catalogue.service";
+import { assertPriceFloor, CatalogueService } from "./catalogue.service";
 import { PricingService } from "./pricing.service";
 
 class BarcodeDto {
@@ -41,7 +41,8 @@ class CreateProductDto {
   @IsString() @MinLength(2) @MaxLength(32) code: string;
   @IsString() @MinLength(2) name: string;
   @IsOptional() @IsString() description?: string;
-  @IsEnum(["STANDARD", "VARIANT", "PREPACKED_SET", "VIRTUAL_BUNDLE", "ASSEMBLED_KIT", "NON_STOCK"]) product_type: any;
+  @IsEnum(["STANDARD", "VARIANT", "PREPACKED_SET", "VIRTUAL_BUNDLE", "ASSEMBLED_KIT", "NON_STOCK", "BULK"]) product_type: any;
+  @IsOptional() @IsBoolean() negotiable_price?: boolean;
   @IsOptional() @IsUUID() department_id?: string;
   @IsOptional() @IsUUID() category_id?: string;
   @IsOptional() @IsUUID() brand_id?: string;
@@ -60,6 +61,7 @@ class UpdateProductDto {
   @IsOptional() @IsUUID() department_id?: string;
   @IsOptional() @IsUUID() brand_id?: string;
   @IsOptional() @IsUUID() tax_rate_id?: string;
+  @IsOptional() @IsBoolean() negotiable_price?: boolean;
   @IsOptional() @IsIn(["ACTIVE", "DISCONTINUED"]) status?: "ACTIVE" | "DISCONTINUED";
 }
 class UpdateVariantDto {
@@ -90,6 +92,13 @@ class RefDto {
   @IsOptional() @IsUUID() department_id?: string;
   @IsOptional() @IsUUID() parent_id?: string;
 }
+class UpdateRefDto {
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(80) name?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+  /** Categories only. null clears the value. */
+  @IsOptional() @IsUUID() department_id?: string | null;
+  @IsOptional() @IsUUID() parent_id?: string | null;
+}
 class PriceListItemDto {
   @IsUUID() variant_id: string;
   @IsDecimalValue({ min: 0, maxDecimals: 2 }) price: string;
@@ -115,7 +124,7 @@ export class CatalogueController {
 
   @Post("products") @RequirePermissions("products.manage")
   create(@Auth() a: AuthContext, @Body() dto: CreateProductDto) {
-    if (!a.permissions.has("prices.manage") && dto.variants.some((v) => v.min_price)) throw invalid("FORBIDDEN_PRICE", "Setting minimum prices requires prices.manage");
+    if (!a.permissions.has("prices.manage") && (dto.variants.some((v) => v.min_price) || dto.negotiable_price)) throw invalid("FORBIDDEN_PRICE", "Setting minimum prices or bargaining requires prices.manage");
     return this.svc.createProduct(a, dto);
   }
 
@@ -130,6 +139,7 @@ export class CatalogueController {
     const p = await this.prisma.client.product.findFirst({ where: { id, business_id: a.businessId } });
     if (!p) throw notFound("Product");
     if (p.product_type !== "VARIANT") throw invalid("SINGLE_VARIANT", "Only VARIANT products can have additional SKUs");
+    assertPriceFloor(p.negotiable_price, dto);
     await this.prisma.tx((t) => this.svc.createVariant(t, a, id, dto));
     return this.svc.getProduct(a, id);
   }
@@ -180,19 +190,107 @@ export class CatalogueController {
     return { departments, categories, brands, units, tax_rates, attributes, suppliers, price_lists };
   }
 
+  /** Categories with parent, department and product counts (for the catalogue setup screen). */
+  @Get("catalogue/categories") @RequirePermissions("products.view")
+  async categories(@Auth() a: AuthContext) {
+    const [cats, depts, counts] = await Promise.all([
+      this.prisma.client.category.findMany({ where: { business_id: a.businessId }, orderBy: { name: "asc" } }),
+      this.prisma.client.department.findMany({ where: { business_id: a.businessId } }),
+      this.prisma.client.product.groupBy({ by: ["category_id"], where: { business_id: a.businessId }, _count: { _all: true } }),
+    ]);
+    return cats.map((c) => ({
+      ...c,
+      parent_name: cats.find((p) => p.id === c.parent_id)?.name ?? null,
+      department_name: depts.find((d) => d.id === c.department_id)?.name ?? null,
+      product_count: counts.find((x) => x.category_id === c.id)?._count._all ?? 0,
+    }));
+  }
+
   @Post("catalogue/:kind") @RequirePermissions("products.manage")
   async createRef(@Auth() a: AuthContext, @Param("kind") kind: string, @Body() dto: RefDto) {
-    const code = (dto.code ?? dto.name).toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 24);
+    const name = dto.name.trim();
+    if (!name) throw invalid("NAME_REQUIRED", "Enter a name");
+    const b = a.businessId;
+    const base = (dto.code ?? name).toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, kind === "units" ? 16 : 24) || "X";
+    // Pick a free code (CODE, CODE-2, CODE-3…) so two similar names never collide.
+    const freeCode = async (exists: (code: string) => Promise<unknown>) => {
+      for (let i = 1; i < 100; i++) {
+        const code = i === 1 ? base : `${base.slice(0, (kind === "units" ? 16 : 24) - String(i).length - 1)}-${i}`;
+        if (!(await exists(code))) return code;
+      }
+      throw invalid("CODE_EXHAUSTED", "Choose a different name");
+    };
+    const dup = () => invalid("DUPLICATE_NAME", `"${name}" already exists`);
     let row: { id: string };
     switch (kind) {
-      case "departments": row = await this.prisma.client.department.create({ data: { business_id: a.businessId, code, name: dto.name } }); break;
-      case "categories": row = await this.prisma.client.category.create({ data: { business_id: a.businessId, code, name: dto.name, department_id: dto.department_id ?? null, parent_id: dto.parent_id ?? null } }); break;
-      case "brands": row = await this.prisma.client.brand.create({ data: { business_id: a.businessId, name: dto.name } }); break;
-      case "units": row = await this.prisma.client.unit.create({ data: { business_id: a.businessId, code: code.slice(0, 16), name: dto.name } }); break;
+      case "departments": {
+        if (await this.prisma.client.department.findFirst({ where: { business_id: b, name: { equals: name, mode: "insensitive" } } })) throw dup();
+        const code = await freeCode((c) => this.prisma.client.department.findFirst({ where: { business_id: b, code: c } }));
+        row = await this.prisma.client.department.create({ data: { business_id: b, code, name } }); break;
+      }
+      case "categories": {
+        if (dto.parent_id && !(await this.prisma.client.category.findFirst({ where: { id: dto.parent_id, business_id: b } }))) throw notFound("Parent category");
+        if (dto.department_id && !(await this.prisma.client.department.findFirst({ where: { id: dto.department_id, business_id: b } }))) throw notFound("Department");
+        if (await this.prisma.client.category.findFirst({ where: { business_id: b, parent_id: dto.parent_id ?? null, name: { equals: name, mode: "insensitive" } } })) throw dup();
+        const code = await freeCode((c) => this.prisma.client.category.findFirst({ where: { business_id: b, code: c } }));
+        row = await this.prisma.client.category.create({ data: { business_id: b, code, name, department_id: dto.department_id ?? null, parent_id: dto.parent_id ?? null } }); break;
+      }
+      case "brands":
+        if (await this.prisma.client.brand.findFirst({ where: { business_id: b, name: { equals: name, mode: "insensitive" } } })) throw dup();
+        row = await this.prisma.client.brand.create({ data: { business_id: b, name } }); break;
+      case "units": {
+        if (await this.prisma.client.unit.findFirst({ where: { business_id: b, name: { equals: name, mode: "insensitive" } } })) throw dup();
+        const code = dto.code ? base : await freeCode((c) => this.prisma.client.unit.findFirst({ where: { business_id: b, code: c } }));
+        if (dto.code && (await this.prisma.client.unit.findFirst({ where: { business_id: b, code } }))) throw invalid("DUPLICATE_CODE", `Unit code ${code} already exists`);
+        row = await this.prisma.client.unit.create({ data: { business_id: b, code, name } }); break;
+      }
       default: throw notFound(`Reference type ${kind}`);
     }
-    await this.audit.record(a, { action: `${kind}.created`, entityType: kind, entityId: row.id, summary: `${kind} "${dto.name}" created` });
+    await this.audit.record(a, { action: `${kind}.created`, entityType: kind, entityId: row.id, summary: `${kind} "${name}" created` });
     return row;
+  }
+
+  @Patch("catalogue/:kind/:id") @RequirePermissions("products.manage")
+  async updateRef(@Auth() a: AuthContext, @Param("kind") kind: string, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateRefDto) {
+    const b = a.businessId;
+    const name = dto.name?.trim();
+    const dup = () => invalid("DUPLICATE_NAME", `"${name}" already exists`);
+    let before: any;
+    switch (kind) {
+      case "categories": {
+        before = await this.prisma.client.category.findFirst({ where: { id, business_id: b } });
+        if (!before) throw notFound("Category");
+        const parentId = dto.parent_id !== undefined ? dto.parent_id : before.parent_id;
+        if (parentId) {
+          if (!(await this.prisma.client.category.findFirst({ where: { id: parentId, business_id: b } }))) throw notFound("Parent category");
+          // A category cannot be placed under itself or one of its own sub-categories.
+          if ((await this.svc.categoryTree(b, id)).includes(parentId)) throw invalid("CATEGORY_CYCLE", "A category cannot be placed under itself or one of its sub-categories");
+        }
+        if (dto.department_id && !(await this.prisma.client.department.findFirst({ where: { id: dto.department_id, business_id: b } }))) throw notFound("Department");
+        if (name && (await this.prisma.client.category.findFirst({ where: { business_id: b, parent_id: parentId ?? null, id: { not: id }, name: { equals: name, mode: "insensitive" } } }))) throw dup();
+        await this.prisma.client.category.update({ where: { id }, data: { name, active: dto.active, parent_id: dto.parent_id !== undefined ? dto.parent_id : undefined, department_id: dto.department_id !== undefined ? dto.department_id : undefined } });
+        break;
+      }
+      case "departments":
+        before = await this.prisma.client.department.findFirst({ where: { id, business_id: b } });
+        if (!before) throw notFound("Department");
+        if (name && (await this.prisma.client.department.findFirst({ where: { business_id: b, id: { not: id }, name: { equals: name, mode: "insensitive" } } }))) throw dup();
+        await this.prisma.client.department.update({ where: { id }, data: { name, active: dto.active } }); break;
+      case "brands":
+        before = await this.prisma.client.brand.findFirst({ where: { id, business_id: b } });
+        if (!before) throw notFound("Brand");
+        if (name && (await this.prisma.client.brand.findFirst({ where: { business_id: b, id: { not: id }, name: { equals: name, mode: "insensitive" } } }))) throw dup();
+        await this.prisma.client.brand.update({ where: { id }, data: { name, active: dto.active } }); break;
+      case "units":
+        before = await this.prisma.client.unit.findFirst({ where: { id, business_id: b } });
+        if (!before) throw notFound("Unit");
+        if (dto.active !== undefined) throw invalid("UNIT_NO_STATUS", "Units cannot be deactivated; rename them instead");
+        if (name && (await this.prisma.client.unit.findFirst({ where: { business_id: b, id: { not: id }, name: { equals: name, mode: "insensitive" } } }))) throw dup();
+        await this.prisma.client.unit.update({ where: { id }, data: { name } }); break;
+      default: throw notFound(`Reference type ${kind}`);
+    }
+    await this.audit.record(a, { action: `${kind}.updated`, entityType: kind, entityId: id, summary: `${kind} "${before.name}" updated`, data: { before: { name: before.name, active: before.active, parent_id: before.parent_id, department_id: before.department_id }, after: dto } });
+    return { id };
   }
 
   // ------------------------------------------------------------- price lists

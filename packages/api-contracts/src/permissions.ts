@@ -10,7 +10,7 @@ export const PERMISSIONS = [
   { code: "pos.sell", module: "pos", description: "Ring up sales at the POS" },
   { code: "pos.hold", module: "pos", description: "Hold and recall carts" },
   { code: "pos.discount", module: "pos", description: "Apply discounts within the policy limit" },
-  { code: "pos.price_override", module: "pos", description: "Override price (min-price breaches still need approval)", sensitive: true },
+  { code: "pos.price_override", module: "pos", description: "Override price on fixed-price items (min-price breaches still need approval)", sensitive: true },
   { code: "pos.credit_sale", module: "pos", description: "Sell on customer credit" },
   { code: "pos.return", module: "pos", description: "Process customer returns and exchanges" },
   { code: "pos.confirm_payment", module: "pos", description: "Manually confirm electronic payments with a reference", sensitive: true },

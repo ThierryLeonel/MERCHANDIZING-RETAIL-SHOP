@@ -1,4 +1,10 @@
+import { config as loadEnv } from "dotenv";
+import { existsSync } from "node:fs";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { resolve } from "node:path";
+
+// Load the repository-root .env for local runs (real environment variables take precedence).
+for (const p of [resolve(__dirname, "../../../.env"), resolve(process.cwd(), ".env")]) if (existsSync(p)) { loadEnv({ path: p, quiet: true }); break; }
 
 /**
  * Entry point.

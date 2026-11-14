@@ -72,12 +72,12 @@ export async function makeWorld(opts: { pricesIncludeTax?: boolean } = {}) {
 
   let skuSeq = 0;
   /** Creates a single-SKU product; returns the variant. */
-  const product = async (p: { retail?: string; min?: string; type?: any; taxPercent?: string; batches?: boolean; serials?: boolean; carton?: string } = {}) => {
+  const product = async (p: { retail?: string; min?: string; type?: any; taxPercent?: string; batches?: boolean; serials?: boolean; carton?: string; negotiable?: boolean; unit?: string } = {}) => {
     let taxId: string | undefined;
     if (p.taxPercent) taxId = (await db.taxRate.create({ data: { business_id: B, code: `T${++skuSeq}`, name: "test tax", rate_percent: D(p.taxPercent) } })).id;
     const sku = `SKU-${tag}-${++skuSeq}`;
     const prod = await svc.catalogue.createProduct(owner, {
-      code: `P-${sku}`, name: `Product ${sku}`, product_type: p.type ?? "STANDARD", base_unit_id: units.PCS, tax_rate_id: taxId, track_batches: p.batches, track_expiry: p.batches, track_serials: p.serials,
+      code: `P-${sku}`, name: `Product ${sku}`, product_type: p.type ?? "STANDARD", base_unit_id: units[p.unit ?? "PCS"], negotiable_price: p.negotiable, tax_rate_id: taxId, track_batches: p.batches, track_expiry: p.batches, track_serials: p.serials,
       variants: [{ sku, name: `Variant ${sku}`, retail_price: p.retail ?? "1000", min_price: p.min, conversions: p.carton ? [{ unit_id: units.CTN, factor: p.carton, is_purchase_default: true, is_sellable: true }] : undefined }],
     });
     return db.productVariant.findFirstOrThrow({ where: { product_id: prod.id } });

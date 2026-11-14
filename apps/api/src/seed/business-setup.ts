@@ -119,7 +119,7 @@ export async function setupBusiness(db: PrismaClient, input: { name: string; leg
       await tx.approvalPolicy.create({ data: { business_id: business.id, request_type: type, threshold_amount: p.amount ? D(p.amount) : null, threshold_percent: p.percent ? D(p.percent) : null, approver_permission: (APPROVAL_TYPES as any)[type], description: p.description } });
     }
     for (const [name, code] of EXPENSE_CATEGORIES) await tx.expenseCategory.create({ data: { business_id: business.id, name, account_id: ids[code] } });
-    for (const [code, name] of [["PCS", "Piece"], ["CTN", "Carton"], ["PK", "Pack"], ["BOX", "Box"], ["DZ", "Dozen"], ["PR", "Pair"], ["SET", "Set"]]) {
+    for (const [code, name] of [["PCS", "Piece"], ["CTN", "Carton"], ["PK", "Pack"], ["BOX", "Box"], ["DZ", "Dozen"], ["PR", "Pair"], ["SET", "Set"], ["KG", "Kilogram"], ["L", "Litre"], ["M", "Metre"], ["BAG", "Bag"], ["BALE", "Bale"], ["HEAP", "Heap"]]) {
       await tx.unit.create({ data: { business_id: business.id, code, name } });
     }
     await tx.taxRate.create({ data: { business_id: business.id, code: "NONE", name: "No tax / exempt", rate_percent: D(0) } });

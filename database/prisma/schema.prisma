@@ -51,6 +51,7 @@ enum ProductType {
   VIRTUAL_BUNDLE
   ASSEMBLED_KIT
   NON_STOCK
+  BULK
 }
 
 enum RecordStatus {
@@ -493,6 +494,8 @@ model Product {
   track_batches Boolean      @default(false)
   track_expiry  Boolean      @default(false)
   track_serials Boolean      @default(false)
+  /// Price may be bargained at the till, never below the minimum price.
+  negotiable_price Boolean   @default(false)
   warranty_months Int?
   image_attachment_id String? @db.Uuid
   status        RecordStatus @default(ACTIVE)

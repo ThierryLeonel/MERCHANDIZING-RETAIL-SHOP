@@ -28,6 +28,10 @@ export default function ProductDetail() {
   const [uploadErr, setUploadErr] = useState<unknown>(null);
   if (isLoading) return <Spinner />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
+  const toggleBargain = async () => {
+    setUploadErr(null);
+    try { await api(`/products/${p.id}`, { method: "PATCH", body: { negotiable_price: !p.negotiable_price } }); toast(p.negotiable_price ? "Bargaining turned off" : "Bargaining allowed"); refetch(); } catch (e) { setUploadErr(e); }
+  };
   const branchName = (bid: string) => me?.branches.find((b) => b.id === bid)?.code ?? "Other branch";
   const upload = async (f: File) => {
     setUploadErr(null);
@@ -36,7 +40,7 @@ export default function ProductDetail() {
   };
   return (
     <div className="space-y-5">
-      <PageHeader title={p.name} subtitle={<>{p.code} · {humanize(p.product_type)} · base unit {p.base_unit_code} · <Status value={p.status} /></>} actions={can("products.manage") && p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setDiscontinue(true)}>Discontinue</Button>} />
+      <PageHeader title={p.name} subtitle={<>{p.code} · {p.product_type === "BULK" ? "Bulk / loose goods" : humanize(p.product_type)} · base unit {p.base_unit_code} · <Status value={p.status} /></>} actions={can("products.manage") && p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setDiscontinue(true)}>Discontinue</Button>} />
       <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
         <Card>
           <ProductImage attachmentId={p.image_attachment_id} className="h-44 w-full" />
@@ -47,6 +51,12 @@ export default function ProductDetail() {
           )}
           <ErrorText error={uploadErr} />
           <dl className="mt-4 space-y-1 text-sm">
+            {p.product_type === "BULK" && <div><Badge tone="blue">Sold by {p.base_unit_code} (fractions allowed)</Badge></div>}
+            <div className="flex flex-wrap items-center gap-2">
+              {p.negotiable_price ? <Badge tone="amber">Price can be bargained</Badge> : <span className="text-xs text-slate-500">Fixed price</span>}
+              {can("prices.manage") && p.status === "ACTIVE" && <Button size="sm" variant="ghost" onClick={toggleBargain}>{p.negotiable_price ? "Turn off" : "Allow bargaining"}</Button>}
+            </div>
+            {p.negotiable_price && <p className="text-xs text-slate-500">Cashiers may enter the agreed price at the till, down to each SKU's minimum price — never below it.</p>}
             {p.track_batches && <div><Badge tone="blue">Batch{p.track_expiry ? " + expiry" : ""} tracked</Badge></div>}
             {p.track_serials && <div><Badge tone="violet">Serial tracked</Badge>{p.warranty_months && <span className="ml-1 text-xs text-slate-500">{p.warranty_months}-month warranty</span>}</div>}
           </dl>
@@ -63,13 +73,13 @@ export default function ProductDetail() {
           ]} />
         </Card>
       </div>
-      {editing && <VariantEdit variant={editing} canPrice={can("prices.manage")} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refetch(); toast("Variant updated"); }} />}
+      {editing && <VariantEdit variant={editing} negotiable={p.negotiable_price} canPrice={can("prices.manage")} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refetch(); toast("Variant updated"); }} />}
       <ConfirmDialog open={discontinue} danger requireReason title="Discontinue product" message="Discontinued products cannot be sold or purchased. History is preserved." onClose={() => setDiscontinue(false)} onConfirm={async () => { await api(`/products/${p.id}`, { method: "PATCH", body: { status: "DISCONTINUED" } }); refetch(); }} />
     </div>
   );
 }
 
-function VariantEdit({ variant, canPrice, onClose, onSaved }: { variant: any; canPrice: boolean; onClose: () => void; onSaved: () => void }) {
+function VariantEdit({ variant, negotiable, canPrice, onClose, onSaved }: { variant: any; negotiable: boolean; canPrice: boolean; onClose: () => void; onSaved: () => void }) {
   const [f, setF] = useState({ name: variant.name, retail_price: variant.retail_price, wholesale_price: variant.wholesale_price ?? "", min_price: variant.min_price ?? "", reorder_point: variant.reorder_point, reorder_qty: variant.reorder_qty, is_shortcut: variant.is_shortcut });
   const [err, setErr] = useState<unknown>(null); const [busy, setBusy] = useState(false);
   const save = async () => {
@@ -85,7 +95,7 @@ function VariantEdit({ variant, canPrice, onClose, onSaved }: { variant: any; ca
         <Field label="Name" className="sm:col-span-2">{(id) => <Input id={id} value={f.name} onChange={set("name")} />}</Field>
         <Field label="Retail price" hint={canPrice ? undefined : "Requires prices.manage"}>{(id, d) => <Input id={id} aria-describedby={d} disabled={!canPrice} value={f.retail_price} onChange={set("retail_price")} />}</Field>
         <Field label="Wholesale price">{(id) => <Input id={id} disabled={!canPrice} value={f.wholesale_price} onChange={set("wholesale_price")} />}</Field>
-        <Field label="Minimum price" hint="Selling below needs approval">{(id, d) => <Input id={id} aria-describedby={d} disabled={!canPrice} value={f.min_price} onChange={set("min_price")} />}</Field>
+        <Field label="Minimum price" hint={negotiable ? "Lowest price a cashier can agree — never below" : "Selling below needs manager approval"}>{(id, d) => <Input id={id} aria-describedby={d} disabled={!canPrice} value={f.min_price} onChange={set("min_price")} />}</Field>
         <Field label="Reorder point">{(id) => <Input id={id} value={f.reorder_point} onChange={set("reorder_point")} />}</Field>
         <Field label="Reorder quantity">{(id) => <Input id={id} value={f.reorder_qty} onChange={set("reorder_qty")} />}</Field>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_shortcut} onChange={set("is_shortcut")} /> Show as POS shortcut</label>

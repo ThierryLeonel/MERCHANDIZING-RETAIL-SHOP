@@ -36,10 +36,19 @@ export interface ProductInput {
   track_expiry?: boolean;
   track_serials?: boolean;
   warranty_months?: number | null;
+  /** Price may be bargained at the till, never below the variant's minimum price. */
+  negotiable_price?: boolean;
   variants: VariantInput[];
 }
 
-const SINGLE_VARIANT_TYPES: ProductType[] = ["STANDARD", "PREPACKED_SET", "NON_STOCK"];
+const SINGLE_VARIANT_TYPES: ProductType[] = ["STANDARD", "PREPACKED_SET", "NON_STOCK", "BULK"];
+
+/** Minimum price must not exceed the retail price; negotiable products need a minimum price on every SKU. */
+export function assertPriceFloor(negotiable: boolean, v: { sku: string; retail_price: unknown; min_price?: unknown }) {
+  const min = v.min_price != null && v.min_price !== "" ? D(v.min_price as string) : null;
+  if (min && min.greaterThan(D(v.retail_price as string))) throw invalid("MIN_ABOVE_RETAIL", `${v.sku}: the minimum price cannot be higher than the retail price`);
+  if (negotiable && (!min || !min.gt(0))) throw invalid("MIN_PRICE_REQUIRED", `${v.sku}: set a minimum price — bargained prices can never go below it`);
+}
 
 @Injectable()
 export class CatalogueService {
@@ -57,6 +66,8 @@ export class CatalogueService {
       throw invalid("NON_STOCK_TRACKING", "Non-stock items cannot track batches or serials");
     }
     if (input.track_expiry && !input.track_batches) throw invalid("EXPIRY_NEEDS_BATCH", "Expiry tracking requires batch tracking");
+    if (input.product_type === "BULK" && input.track_serials) throw invalid("BULK_NO_SERIALS", "Bulk / loose goods are sold by quantity and cannot track serial numbers");
+    for (const v of input.variants) assertPriceFloor(!!input.negotiable_price, v);
     const run = async (t: Tx) => {
       const product = await t.product.create({
         data: {
@@ -64,7 +75,7 @@ export class CatalogueService {
           product_type: input.product_type, department_id: input.department_id ?? null, category_id: input.category_id ?? null,
           brand_id: input.brand_id ?? null, base_unit_id: input.base_unit_id, tax_rate_id: input.tax_rate_id ?? null,
           track_batches: !!input.track_batches, track_expiry: !!input.track_expiry, track_serials: !!input.track_serials,
-          warranty_months: input.warranty_months ?? null,
+          warranty_months: input.warranty_months ?? null, negotiable_price: !!input.negotiable_price,
         },
       });
       for (const v of input.variants) await this.createVariant(t, auth, product.id, v);
@@ -102,10 +113,18 @@ export class CatalogueService {
     return variant;
   }
 
+  /** A category and all its sub-categories (any depth). */
+  async categoryTree(businessId: string, categoryId: string): Promise<string[]> {
+    const all = await this.prisma.client.category.findMany({ where: { business_id: businessId }, select: { id: true, parent_id: true } });
+    const out = [categoryId];
+    for (let i = 0; i < out.length; i++) for (const c of all) if (c.parent_id === out[i] && !out.includes(c.id)) out.push(c.id);
+    return out;
+  }
+
   async listProducts(auth: AuthContext, q: PageQuery & { category_id?: string; status?: string; department_id?: string }) {
     const where: Prisma.ProductWhereInput = {
       business_id: auth.businessId,
-      ...(q.category_id ? { category_id: q.category_id } : {}),
+      ...(q.category_id ? { category_id: { in: await this.categoryTree(auth.businessId, q.category_id) } } : {}),
       ...(q.department_id ? { department_id: q.department_id } : {}),
       ...(q.status ? { status: q.status as any } : {}),
       ...(q.search
@@ -162,9 +181,13 @@ export class CatalogueService {
     };
   }
 
-  async updateProduct(auth: AuthContext, id: string, data: Partial<Pick<ProductInput, "name" | "description" | "category_id" | "brand_id" | "department_id" | "tax_rate_id">> & { status?: "ACTIVE" | "DISCONTINUED" }) {
-    const p = await this.prisma.client.product.findFirst({ where: { id, business_id: auth.businessId } });
+  async updateProduct(auth: AuthContext, id: string, data: Partial<Pick<ProductInput, "name" | "description" | "category_id" | "brand_id" | "department_id" | "tax_rate_id" | "negotiable_price">> & { status?: "ACTIVE" | "DISCONTINUED" }) {
+    const p = await this.prisma.client.product.findFirst({ where: { id, business_id: auth.businessId }, include: { variants: true } });
     if (!p) throw notFound("Product");
+    if (data.negotiable_price !== undefined && data.negotiable_price !== p.negotiable_price) {
+      if (!can(auth, "prices.manage")) throw invalid("FORBIDDEN_PRICE", "Turning bargaining on or off requires prices.manage");
+      if (data.negotiable_price) for (const v of p.variants.filter((x) => x.status === "ACTIVE")) assertPriceFloor(true, v);
+    }
     await this.prisma.tx(async (t) => {
       await t.product.update({ where: { id }, data });
       if (data.status) await t.productVariant.updateMany({ where: { product_id: id }, data: { status: data.status } });
@@ -174,8 +197,11 @@ export class CatalogueService {
   }
 
   async updateVariant(auth: AuthContext, id: string, data: { name?: string; retail_price?: string; wholesale_price?: string | null; min_price?: string | null; reorder_point?: string; reorder_qty?: string; preferred_supplier_id?: string | null; is_shortcut?: boolean; status?: "ACTIVE" | "DISCONTINUED" }) {
-    const v = await this.prisma.client.productVariant.findFirst({ where: { id, business_id: auth.businessId } });
+    const v = await this.prisma.client.productVariant.findFirst({ where: { id, business_id: auth.businessId }, include: { product: true } });
     if (!v) throw notFound("Variant");
+    if (data.retail_price !== undefined || data.min_price !== undefined) {
+      assertPriceFloor(v.product.negotiable_price, { sku: v.sku, retail_price: data.retail_price ?? v.retail_price, min_price: data.min_price !== undefined ? data.min_price : v.min_price });
+    }
     const priceChange = data.retail_price !== undefined || data.wholesale_price !== undefined || data.min_price !== undefined;
     if (priceChange && !can(auth, "prices.manage")) throw invalid("FORBIDDEN_PRICE", "Changing prices requires prices.manage");
     return this.prisma.tx(async (t) => {
@@ -220,7 +246,7 @@ export class CatalogueService {
         business_id: auth.businessId, status: "ACTIVE",
         ...(opts.variantIds ? { id: { in: opts.variantIds } } : {}),
         ...(opts.shortcutsOnly ? { is_shortcut: true } : {}),
-        ...(opts.categoryId ? { product: { category_id: opts.categoryId } } : {}),
+        ...(opts.categoryId ? { product: { category_id: { in: await this.categoryTree(auth.businessId, opts.categoryId) } } } : {}),
         ...(opts.search ? { OR: [{ name: { contains: opts.search, mode: "insensitive" } }, { sku: { contains: opts.search, mode: "insensitive" } }, { product: { name: { contains: opts.search, mode: "insensitive" } } }, { barcodes: { some: { code: opts.search } } }] } : {}),
       },
       include: { product: true, unit_conversions: true },
@@ -242,7 +268,7 @@ export class CatalogueService {
       const tax = taxRates.find((t) => t.id === v.product.tax_rate_id);
       out.push({
         variant_id: v.id, product_id: v.product_id, sku: v.sku, name: v.name, product_name: v.product.name,
-        product_type: v.product.product_type, track_serials: v.product.track_serials, track_batches: v.product.track_batches,
+        product_type: v.product.product_type, negotiable_price: v.product.negotiable_price, track_serials: v.product.track_serials, track_batches: v.product.track_batches,
         base_unit_code: units.find((u) => u.id === v.product.base_unit_id)?.code ?? "PCS",
         unit_price: price.unitPrice.toString(), min_price: price.minPrice?.toString() ?? null, price_source: price.source,
         tax_percent: tax?.rate_percent.toString() ?? "0", tax_code: tax?.code ?? null,

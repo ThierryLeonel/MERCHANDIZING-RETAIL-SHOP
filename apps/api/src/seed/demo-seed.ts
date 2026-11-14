@@ -97,6 +97,7 @@ export async function runDemoSeed(app: INestApplicationContext, opts: { quiet?: 
     ["DRESSES", "Dresses", "FASHION"], ["MENSWEAR", "Menswear", "FASHION"], ["SHOES", "Shoes", "FASHION"], ["BAGS", "Bags", "ACCESS"], ["WATCHES", "Watches", "ACCESS"],
     ["JEWELLERY", "Accessories", "ACCESS"], ["BABYWEAR", "Baby clothing", "BABY"], ["BABYCARE", "Baby bath & care", "BABY"], ["PARTY", "Party supplies", "PARTY"],
     ["DETERGENT", "Detergents", "CLEAN"], ["HOUSEHOLD", "Household paper", "CLEAN"], ["SERVICES", "Services", "PARTY"],
+    ["LOOSE", "Bulk & loose goods", "FASHION"],
   ]) cats[code] = (await db.category.create({ data: { business_id: B, code, name, department_id: depts[dept] } })).id;
   const brands: Record<string, string> = {};
   for (const name of ["Sawa Home", "Kumba Kitchen", "Bella Douala", "Ébène Parfums", "Wouri Wear", "Mungo Leather", "Limbe Time", "Petit Lion", "Fête Facile", "Propre+"]) brands[name] = (await db.brand.create({ data: { business_id: B, name } })).id;
@@ -157,6 +158,9 @@ export async function runDemoSeed(app: INestApplicationContext, opts: { quiet?: 
   await add("partykit", { code: "P-PARTYKIT", name: "Birthday party kit (prepacked)", product_type: "PREPACKED_SET", department_id: depts.PARTY, category_id: cats.PARTY, brand_id: brands["Fête Facile"], variants: one("PTY-KIT", "Birthday party kit for 10", "15000") });
   await add("balloons", { code: "P-BALLOON", name: "Balloons (pack of 50)", product_type: "STANDARD", department_id: depts.PARTY, category_id: cats.PARTY, brand_id: brands["Fête Facile"], variants: one("BAL-50", "Balloons assorted, pack of 50", "3000", { is_shortcut: true }) });
   await add("plates", { code: "P-PLATES", name: "Paper plates (pack of 20)", product_type: "STANDARD", department_id: depts.PARTY, category_id: cats.PARTY, brand_id: brands["Fête Facile"], variants: one("PLT-20", "Paper plates, pack of 20", "1500") });
+  // Bulk / loose goods: bought as a lot, sold by the piece or metre, price bargained down to a minimum.
+  await add("tshirtBale", { code: "P-FRIP-TS", name: "Second-hand T-shirts (from bales)", product_type: "BULK", negotiable_price: true, department_id: depts.FASHION, category_id: cats.LOOSE, variants: [{ sku: "FRIP-TS", name: "Second-hand T-shirt (assorted)", retail_price: "1500", min_price: "1000", reorder_point: "40", reorder_qty: "120", is_shortcut: true, conversions: [{ unit_id: units.BALE, factor: "120", is_purchase_default: true, is_sellable: true }] }] });
+  await add("wax", { code: "P-WAX", name: "Wax print fabric (by the metre)", product_type: "BULK", negotiable_price: true, base_unit_id: units.M, department_id: depts.FASHION, category_id: cats.LOOSE, variants: [{ sku: "WAX-M", name: "Wax print fabric, per metre", retail_price: "2500", min_price: "2000", reorder_point: "12", reorder_qty: "36", is_shortcut: true }] });
   const cartonOf = (n: string) => ({ conversions: [{ unit_id: units.CTN, factor: n, is_purchase_default: true, is_sellable: true }] });
   await add("detergent", { code: "P-DETERG1L", name: "Liquid detergent 1 L", product_type: "STANDARD", department_id: depts.CLEAN, category_id: cats.DETERGENT, brand_id: brands["Propre+"], variants: [{ sku: "DTG-1L", name: "Liquid detergent 1 L", retail_price: "2200", wholesale_price: "1900", reorder_point: "24", reorder_qty: "48", preferred_supplier_id: suppliers["SUP-CLEAN"], is_shortcut: true, barcodes: [{ code: "6300000001001" }, { code: "6300000001012", unit_id: units.CTN }], ...cartonOf("12") }] });
   await add("powder", { code: "P-POWDER500", name: "Washing powder 500 g", product_type: "STANDARD", department_id: depts.CLEAN, category_id: cats.DETERGENT, brand_id: brands["Propre+"], variants: [{ sku: "PWD-500", name: "Washing powder 500 g", retail_price: "1200", wholesale_price: "1000", reorder_point: "48", reorder_qty: "96", preferred_supplier_id: suppliers["SUP-CLEAN"], barcodes: [{ code: "6300000002001" }, { code: "6300000002024", unit_id: units.CTN }], ...cartonOf("24") }] });
@@ -224,7 +228,8 @@ export async function runDemoSeed(app: INestApplicationContext, opts: { quiet?: 
     });
     await poAndReceive(branch.id, "SUP-FASHION", fashionSkus.map((sku) => ({ sku, qty: "4", cost: fashionCost(sku) })), { receiveFraction: label === "DLA2" ? 0.5 : 1 });
   }
-  log("Purchasing: purchase orders approved and received (incl. carton conversions, damaged goods, batches, serials, a partial delivery)");
+  await poAndReceive(dla1.id, "SUP-FASHION", [{ sku: "FRIP-TS", qty: "1", cost: "90000", unit: "BALE" }, { sku: "WAX-M", qty: "48", cost: "1500" }]); // 1 bale = 120 T-shirts; 48 m of fabric
+  log("Purchasing: purchase orders approved and received (incl. carton conversions, damaged goods, batches, serials, a partial delivery, a bale of loose goods)");
 
   // Supplier invoice matched to the warehouse receipt (with a price difference) and a part payment
   const whReceipt = await db.goodsReceipt.findFirstOrThrow({ where: { purchase_order_id: poWh.id }, include: { lines: true } });
