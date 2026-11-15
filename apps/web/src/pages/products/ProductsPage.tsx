@@ -16,7 +16,7 @@ export default function ProductsPage() {
   const list = useList<any>("/products", { category_id: category, status }, { sort: "name", order: "asc" });
   return (
     <div>
-      <PageHeader title="Products" subtitle="Catalogue of products and sellable variants (SKUs)" actions={<><Link to="/products/setup"><Button variant="secondary" icon={<FolderTree className="h-4 w-4" />}>Categories & units</Button></Link>{can("products.manage") && <Link to="/products/new"><Button icon={<Plus className="h-4 w-4" />}>New product</Button></Link>}</>} />
+      <PageHeader title="Products" subtitle="Catalogue of products and sellable variants (SKUs)" actions={<>{can("data.import") && <Link to="/import?type=products"><Button variant="secondary">Import / export</Button></Link>}<Link to="/products/setup"><Button variant="secondary" icon={<FolderTree className="h-4 w-4" />}>Categories & units</Button></Link>{can("products.manage") && <Link to="/products/new"><Button icon={<Plus className="h-4 w-4" />}>New product</Button></Link>}</>} />
       <Card padded={false}>
         <div className="flex flex-wrap gap-2 border-b border-slate-200 p-3">
           <SearchInput value={list.search} onChange={list.setSearch} placeholder="Search name, code, SKU or barcode" />
@@ -29,7 +29,7 @@ export default function ProductsPage() {
           { key: "category", header: "Category", render: (p) => p.category_name ?? "—" },
           { key: "brand", header: "Brand", render: (p) => p.brand_name ?? "—" },
           { key: "skus", header: "SKUs", align: "right", render: (p) => p.variants.length },
-          { key: "price", header: "Retail price", align: "right", render: (p) => { const prices = p.variants.map((v: any) => Number(v.retail_price)); const min = Math.min(...prices), max = Math.max(...prices); return min === max ? money(min) : `${money(min)} – ${money(max)}`; } },
+          { key: "price", header: "Retail price", align: "right", render: (p) => { const prices = p.variants.map((v: any) => Number(v.retail_price)); const min = Math.min(...prices), max = Math.max(...prices); if (!max) return <Badge tone="amber">Price not set</Badge>; return min === max ? money(min) : `${money(min)} – ${money(max)}`; } },
           { key: "status", header: "Status", render: (p) => <Status value={p.status} /> },
         ]} />
         {list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.total} onPage={list.setPage} />}

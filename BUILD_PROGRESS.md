@@ -1,6 +1,6 @@
 # BUILD_PROGRESS
 
-_Last updated: 2026-11-14 (session 3: stock categories, bulk goods, bargaining). Read this first when continuing the build._
+_Last updated: 2026-11-15 (session 4: imports/exports, starter catalogue, voids, deletes, sales history). Read this first when continuing the build._
 
 ## Current phase
 **Phase 1 — complete and verified.** **Phase 2 — mostly implemented** (supplier invoices & payments, credit customers, returns, split payments, transfers, counts, adjustments, approvals, expenses, control-account reconciliation). Remaining Phase 2 items: supplier returns/credit notes, provider settlements and statement reconciliation workflows, auto-cancel of stale pending sales, POS paid-out and exchange-link UI. Phase 3/4 not started (schema foundations exist for promotions, bundles/kits, landed costs, settlements, reconciliations, integrations).
@@ -13,6 +13,8 @@ Verified = covered by automated tests that passed in this session (see "Commands
 - Catalogue (types, variants, attributes, barcodes incl. carton barcodes, packaging conversions), pricing precedence with effective dates, min price & discount approvals.
 - Catalogue setup screen (`/products/setup`): categories with sub-categories (no cycles, case-insensitive duplicate check, activate/deactivate), departments, brands, units; quick "new category" from the product form; category filter includes sub-categories.
 - Bulk / loose goods (`BULK` type: one SKU, fractional quantities, no serials; buy by lot via packaging unit) and negotiable prices: cashiers bargain down to the minimum price, a hard floor (`BELOW_MIN_PRICE`, no approval route); POS "Bargain" dialog accepts a unit price or an agreed total; Pay is disabled until the quote matches the cart.
+- Import & export (`/import`, `data.import`): products & categories (with optional opening stock), opening stock, customers from .xlsx/.csv; English/French headers; dry-run per-row plan; all-or-nothing; export current products/customers in the same format for edit-and-reimport; starter catalogue (~108 mini-supermarket items, prices empty → *Price not set*, unsellable until priced). See documentation/operations/data-import.md.
+- Voids (`transactions.void`, Owner): sale (full reversing return + refund from till/safe/account or to customer account; *Void & re-enter* loads items into POS), expense, customer account payment, supplier payment — records kept, reversals dated today. Deletes only for never-used products, categories/departments/brands/units, customers. Sales history page (`/sales`), supplier payments tab, customer payments tab. See documentation/accounting/policies.md "Voids and corrections".
 - Single-service hosting (Laravel Cloud): port opened immediately on IPv6+IPv4 with 503 while starting, in-process migrations, DB-stored signing secret when `JWT_SECRET` is absent.
 - Purchasing: PO lifecycle with approval threshold, partial receipts with accepted/damaged/rejected, over-receipt tolerance, batches/expiry, serials; supplier invoice matching with PPV (no double counting); supplier payments & advances.
 - Inventory: append-only ledger, weighted average per branch (exact residue), concurrency-safe issues, reservations, FEFO, quarantine/damaged locations, transfers with in-transit and shortages, adjustments, counts.
@@ -24,6 +26,8 @@ Verified = covered by automated tests that passed in this session (see "Commands
 - Web app: all main navigation areas with role-aware menus; POS, returns, products, inventory, purchasing, customers, finance, accounting, reports (17 with CSV), approvals, administration, account/session management.
 - Demo seed through services (reconciles exactly); production setup (no default credentials).
 - Docs: architecture, database, ERD (generated), permission matrix (generated), posting matrix, policies, pricing, reports, deployment, backup/recovery, feature status/limitations/backlog, OpenAPI (123 paths).
+
+Session 4 verification: `pnpm test` **63/63**, `pnpm test:e2e` **11/11** (adds starter catalogue import, CSV customer import, void from Sales history), drift check clean, lint clean, build OK; Excel template download and export → re-import round trip checked in Chrome.
 
 Session 3 verification: `pnpm test` **55/55**, `pnpm test:e2e` **8/8** (adds categories + bargaining browser test), drift check clean, build OK, demo seed reconciles (adds a bale of T-shirts and wax fabric by the metre).
 
@@ -63,7 +67,7 @@ Bugs found and fixed during verification: zero quantities passing `isPos()` guar
 See `documentation/operations/known-limitations-and-backlog.md` (abandoned pending sales keep reservations; single-day demo history; in-memory rate limiting; idempotency record pruning; report row caps; no receipt/invoice reversal documents yet; partial i18n).
 
 ## Pending migrations or configuration
-- No pending migrations. Current: `20261111090000_init`, `20261111090100_integrity_controls`, `20261111100000_session_refresh_grace`, `20261112040000_system_secrets`, `20261114080000_bulk_negotiable_pricing`, `20261114080100_bulk_units` (adds KG/L/M/BAG/BALE/HEAP units to existing businesses). Migrations run automatically at API start (`MIGRATE_ON_START=false` to disable).
+- No pending migrations. Current: `20261111090000_init`, `20261111090100_integrity_controls`, `20261111100000_session_refresh_grace`, `20261112040000_system_secrets`, `20261114080000_bulk_negotiable_pricing`, `20261114080100_bulk_units` (adds KG/L/M/BAG/BALE/HEAP units to existing businesses), `20261115170000_voids_imports` (void columns; grants `transactions.void` and `data.import` to Owner roles). Migrations run automatically at API start (`MIGRATE_ON_START=false` to disable).
 - `init` and `integrity_controls` were edited before first release. Databases created from an earlier snapshot must be reset (`pnpm db:reset`, dev only). **From now on only add new migrations.**
 - Configure for production: `JWT_SECRET`, `CORS_ORIGINS`, persistent private storage, real tax rates (none shipped), posting-rule review by an accountant, approval thresholds.
 - Live mobile money needs provider credentials and an adapter (Phase 4).

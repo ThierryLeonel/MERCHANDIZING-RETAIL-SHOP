@@ -47,6 +47,7 @@ function OpenSession({ onOpened }: { onOpened: () => void }) {
     <div className="mx-auto max-w-md">
       <Card title="Open a cashier session">
         <form onSubmit={open} className="space-y-4">
+          {sessionStorage.getItem("pos.reenter") && <p role="status" className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">The items from the voided sale are waiting — open a session to ring them up again.</p>}
           <p className="text-sm text-slate-600">Count the opening float handed to you from the safe. It is recorded as a transfer from the branch safe to this till.</p>
           <Field label="Register" required>{(id) => (
             <Select id={id} required value={registerId} onChange={(e) => setRegisterId(e.target.value)}>
@@ -78,6 +79,18 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
   const [result, setResult] = useState<any>(null);
   const [discountFor, setDiscountFor] = useState<CartLine | null>(null);
   const [priceFor, setPriceFor] = useState<{ line: CartLine; index: number } | null>(null);
+  // Items handed over by "Void & re-enter" on a sale page.
+  useEffect(() => {
+    const raw = sessionStorage.getItem("pos.reenter");
+    if (!raw) return;
+    sessionStorage.removeItem("pos.reenter");
+    try {
+      const r = JSON.parse(raw);
+      setCart(r.cart ?? []); if (r.customer) setCustomer(r.customer);
+      toast(`Items from voided sale ${r.from} loaded — correct them and take payment`);
+    } catch { /* ignore malformed hand-over */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [serialFor, setSerialFor] = useState<any>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
@@ -156,7 +169,7 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
                 <div className="line-clamp-2 text-sm font-medium">{p.name}</div>
                 {(p.negotiable_price || p.product_type === "BULK") && <div className="mt-1 flex gap-1">{p.product_type === "BULK" && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">per {p.base_unit_code}</span>}{p.negotiable_price && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">Bargain</span>}</div>}
                 <div className="mt-2 flex items-end justify-between gap-2">
-                  <span className="num text-sm font-semibold text-brand-800">{money(p.unit_price)}</span>
+                  {Number(p.unit_price) > 0 ? <span className="num text-sm font-semibold text-brand-800">{money(p.unit_price)}</span> : <span className="text-xs font-medium text-amber-700">No price set</span>}
                   {p.available !== null && <span className={cx("text-xs", Number(p.available) <= 0 ? "text-red-600" : "text-slate-500")}>{qty(p.available)} left</span>}
                 </div>
                 {p.sell_units?.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{p.sell_units.map((u: any) => <span key={u.unit_id} role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); addItem(p, { unit: u }); }} onKeyDown={(e) => e.key === "Enter" && (e.stopPropagation(), addItem(p, { unit: u }))} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-brand-100">+{u.unit_code} ({qty(u.factor)})</span>)}</div>}

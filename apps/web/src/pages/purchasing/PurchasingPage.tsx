@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { date, dateTime, humanize, money, qty, today } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
@@ -15,11 +15,12 @@ export default function PurchasingPage() {
       <PageHeader title="Purchasing" subtitle="Order → approve → receive (accepted / damaged / rejected) → match supplier invoice → pay" actions={can("purchasing.manage") && <Link to="/purchasing/orders/new"><Button icon={<Plus className="h-4 w-4" />}>New purchase order</Button></Link>} />
       <Tabs value={tab} onChange={setTab} tabs={[
         { key: "orders", label: "Purchase orders", hidden: !can("purchasing.view") }, { key: "receipts", label: "Goods receipts", hidden: !can("purchasing.view") },
-        { key: "invoices", label: "Supplier invoices", hidden: !can("purchasing.view") }, { key: "suppliers", label: "Suppliers" },
+        { key: "invoices", label: "Supplier invoices", hidden: !can("purchasing.view") }, { key: "payments", label: "Supplier payments", hidden: !can("purchasing.view") }, { key: "suppliers", label: "Suppliers" },
       ]} />
       {tab === "orders" && <Orders />}
       {tab === "receipts" && <Receipts />}
       {tab === "invoices" && <Invoices />}
+      {tab === "payments" && <SupplierPayments />}
       {tab === "suppliers" && <Suppliers />}
     </div>
   );
@@ -172,6 +173,29 @@ function Suppliers() {
         </div>
         <ErrorText error={err} />
       </Modal>
+    </Card>
+  );
+}
+
+function SupplierPayments() {
+  const { can } = useSession();
+  const toast = useToast();
+  const list = useList<any>("/supplier-payments");
+  const [voiding, setVoiding] = useState<any>(null);
+  return (
+    <Card padded={false} title="Supplier payments">
+      <div className="border-b border-slate-100 p-3"><SearchInput value={list.search} onChange={list.setSearch} placeholder="Payment number or reference" className="max-w-sm" /></div>
+      <DataTable rows={list.data?.items} loading={list.isLoading} error={list.error} empty="No supplier payments yet." columns={[
+        { key: "number", header: "Number" }, { key: "payment_date", header: "Date", render: (p) => date(p.payment_date) }, { key: "supplier_name", header: "Supplier" },
+        { key: "reference", header: "Reference", render: (p) => p.reference ?? "—" },
+        { key: "amount", header: "Amount", align: "right", render: (p) => <span className={p.status === "REVERSED" ? "text-slate-400 line-through" : ""}>{money(p.amount)}</span> },
+        { key: "unallocated", header: "Advance", align: "right", render: (p) => (Number(p.unallocated) ? money(p.unallocated) : "—") },
+        { key: "s", header: "", align: "right", render: (p) => p.status === "REVERSED" ? <span title={p.void_reason ?? undefined}><Badge tone="red">Voided</Badge></span> : can("transactions.void") && <Button size="sm" variant="ghost" onClick={() => setVoiding(p)}>Void</Button> },
+      ]} />
+      {list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.total} onPage={list.setPage} />}
+      <ConfirmDialog open={!!voiding} danger requireReason title={`Void supplier payment ${voiding?.number ?? ""}`} confirmLabel="Void payment"
+        message={<>Reverses the <b>{voiding && money(voiding.amount)}</b> paid to {voiding?.supplier_name}: the invoices it paid become outstanding again. The payment stays on record, marked voided.</>}
+        onClose={() => setVoiding(null)} onConfirm={async (reason) => { await api(`/supplier-payments/${voiding.id}/void`, { body: { reason } }); list.refetch(); toast("Supplier payment voided"); }} />
     </Card>
   );
 }

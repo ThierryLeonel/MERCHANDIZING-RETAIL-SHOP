@@ -10,7 +10,7 @@ Roles are editable per business (Administration → Roles). An administrator can
 | `pos.sell` | Ring up sales at the POS | ✓ | ✓ | ✓ |  |  |  |  |  |
 | `pos.hold` | Hold and recall carts | ✓ | ✓ | ✓ |  |  |  |  |  |
 | `pos.discount` | Apply discounts within the policy limit | ✓ | ✓ | ✓ |  |  |  |  |  |
-| `pos.price_override` ★ | Override price on fixed-price items (min-price breaches still need approval); negotiable items can be bargained by any cashier down to the minimum | ✓ | ✓ |  |  |  |  |  |  |
+| `pos.price_override` ★ | Override price on fixed-price items (min-price breaches still need approval) | ✓ | ✓ |  |  |  |  |  |  |
 | `pos.credit_sale` | Sell on customer credit | ✓ | ✓ |  |  |  |  |  |  |
 | `pos.return` | Process customer returns and exchanges | ✓ | ✓ |  |  |  |  |  |  |
 | `pos.confirm_payment` ★ | Manually confirm electronic payments with a reference | ✓ | ✓ |  |  |  |  |  |  |
@@ -59,6 +59,8 @@ Roles are editable per business (Administration → Roles). An administrator can
 | `admin.roles` | Manage roles and permissions | ✓ |  |  |  |  |  | ✓ |  |
 | `admin.settings` | Business settings, branches, registers, taxes | ✓ |  |  |  |  |  | ✓ |  |
 | `admin.audit` | View audit log | ✓ |  |  |  |  |  | ✓ | ✓ |
+| `transactions.void` ★ | Void sales, expenses and payments (posts reversing entries; records are kept) | ✓ |  |  |  |  |  |  |  |
+| `data.import` ★ | Import products, opening stock and customers from spreadsheets | ✓ |  |  |  |  |  |  |  |
 
 ★ sensitive permission.
 

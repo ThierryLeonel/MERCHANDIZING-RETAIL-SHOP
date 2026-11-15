@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Tabs } from "../../components/ui";
 import { api } from "../../lib/api";
 import { money } from "../../lib/format";
@@ -16,7 +16,7 @@ export default function CustomersPage() {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <PageHeader title="Customers" subtitle="Walk-in sales need no customer. Credit accounts have limits and terms." actions={can("customers.manage") && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>New customer</Button>} />
+      <PageHeader title="Customers" subtitle="Walk-in sales need no customer. Credit accounts have limits and terms." actions={<>{can("data.import") && <Link to="/import?type=customers"><Button variant="secondary">Import / export</Button></Link>}{can("customers.manage") && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>New customer</Button>}</>} />
       <Tabs value={tab} onChange={setTab} tabs={[{ key: "list", label: "Customers" }, { key: "ageing", label: "Receivables ageing" }]} />
       {tab === "list" ? (
         <Card padded={false}>

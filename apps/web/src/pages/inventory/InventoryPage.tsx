@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useApprovalFlow } from "../../components/approval";
 import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, Textarea, useToast } from "../../components/ui";
 import { api, qs } from "../../lib/api";
@@ -9,11 +9,12 @@ import { useApi, useList } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
 
 export default function InventoryPage() {
+  const { can } = useSession();
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get("low") ? "reorder" : "stock");
   return (
     <div>
-      <PageHeader title="Inventory" subtitle="Stock is tracked per variant, location and batch. Quantities are in base units." />
+      <PageHeader title="Inventory" subtitle="Stock is tracked per variant, location and batch. Quantities are in base units." actions={can("data.import") && can("inventory.opening") && <Link to="/import?type=stock"><Button variant="secondary">Import opening stock</Button></Link>} />
       <Tabs value={tab} onChange={setTab} tabs={[
         { key: "stock", label: "Stock levels" }, { key: "movements", label: "Movements" }, { key: "reorder", label: "Reorder" }, { key: "transfers", label: "Transfers" },
         { key: "counts", label: "Counts" }, { key: "adjustments", label: "Adjustments" }, { key: "expiry", label: "Expiry" },

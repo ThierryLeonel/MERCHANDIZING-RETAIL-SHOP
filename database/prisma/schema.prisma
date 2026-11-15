@@ -889,6 +889,9 @@ model SupplierPayment {
   journal_entry_id     String?        @db.Uuid
   created_by_id        String         @db.Uuid
   created_at           DateTime       @default(now()) @db.Timestamptz(6)
+  voided_at            DateTime?      @db.Timestamptz(6)
+  voided_by_id         String?        @db.Uuid
+  void_reason          String?
 
   allocations SupplierPaymentAllocation[]
 
@@ -1247,6 +1250,11 @@ model Sale {
   created_at        DateTime   @default(now()) @db.Timestamptz(6)
   completed_at      DateTime?  @db.Timestamptz(6)
   cancelled_at      DateTime?  @db.Timestamptz(6)
+  /// Voided = fully reversed by an administrator (stock back, refund posted); the sale record is kept.
+  voided_at         DateTime?  @db.Timestamptz(6)
+  voided_by_id      String?    @db.Uuid
+  void_reason       String?
+  void_return_id    String?    @db.Uuid
 
   lines    SaleLine[]
   payments Payment[]
@@ -1349,6 +1357,9 @@ model Payment {
   failure_reason       String?
   created_by_id        String        @db.Uuid
   created_at           DateTime      @default(now()) @db.Timestamptz(6)
+  voided_at            DateTime?      @db.Timestamptz(6)
+  voided_by_id         String?        @db.Uuid
+  void_reason          String?
 
   sale     Sale?            @relation(fields: [sale_id], references: [id], onDelete: Restrict)
   attempts PaymentAttempt[]
@@ -1789,6 +1800,9 @@ model Expense {
   approval_request_id  String?        @db.Uuid
   created_by_id        String         @db.Uuid
   created_at           DateTime       @default(now()) @db.Timestamptz(6)
+  voided_at            DateTime?      @db.Timestamptz(6)
+  voided_by_id         String?        @db.Uuid
+  void_reason          String?
 
   lines ExpenseLine[]
 

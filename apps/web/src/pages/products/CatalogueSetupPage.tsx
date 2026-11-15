@@ -96,8 +96,13 @@ function CategoryEdit({ cat, all, departments, onClose, onSaved }: { cat: any; a
     try { await api(`/catalogue/categories/${cat.id}`, { method: "PATCH", body: { name: f.name, parent_id: f.parent_id || null, department_id: f.department_id || null, active: f.active } }); onSaved(); }
     catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  const remove = async () => {
+    if (!window.confirm(`Delete the category "${cat.name}"?`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/catalogue/categories/${cat.id}`, { method: "DELETE" }); onSaved(); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
   return (
-    <Modal open onClose={onClose} title={`Edit category — ${cat.name}`} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={save}>Save</Button></>}>
+    <Modal open onClose={onClose} title={`Edit category — ${cat.name}`} footer={<><Button variant="ghost" className="mr-auto text-red-700" disabled={busy || cat.product_count > 0} title={cat.product_count > 0 ? "Move its products to another category first" : undefined} onClick={remove}>Delete</Button><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={save}>Save</Button></>}>
       <div className="grid gap-3">
         <Field label="Name" required>{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
         <Field label="Inside category">{(id) => <Select id={id} value={f.parent_id} onChange={(e) => setF({ ...f, parent_id: e.target.value })}><option value="">— Top level —</option>{all.filter((c) => !blocked.has(c.id)).map((c) => <option key={c.id} value={c.id}>{"  ".repeat(c.depth)}{c.name}</option>)}</Select>}</Field>
@@ -157,8 +162,13 @@ function RefEdit({ kind, row, hasStatus, onClose, onSaved }: { kind: Kind; row: 
     setBusy(true); setErr(null);
     try { await api(`/catalogue/${kind}/${row.id}`, { method: "PATCH", body: { name, ...(hasStatus ? { active } : {}) } }); onSaved(); } catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  const remove = async () => {
+    if (!window.confirm(`Delete "${row.name}"?`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/catalogue/${kind}/${row.id}`, { method: "DELETE" }); onSaved(); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
   return (
-    <Modal open onClose={onClose} title={`Edit ${LABEL[kind]} — ${row.name}`} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={save}>Save</Button></>}>
+    <Modal open onClose={onClose} title={`Edit ${LABEL[kind]} — ${row.name}`} footer={<><Button variant="ghost" className="mr-auto text-red-700" disabled={busy} onClick={remove}>Delete</Button><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} onClick={save}>Save</Button></>}>
       <div className="grid gap-3">
         <Field label="Name" required>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
         {hasStatus && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active</label>}

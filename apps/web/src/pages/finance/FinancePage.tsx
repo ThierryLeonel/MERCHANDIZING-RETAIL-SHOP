@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, Select, Status, Tabs, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, Select, Status, Tabs, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { date, dateTime, humanize, money, today } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
@@ -83,6 +83,7 @@ function Expenses() {
   const cats = useApi<any[]>(can("expenses.manage") ? "/expense-categories" : null);
   const accounts = useApi<any[]>("/financial-accounts/options");
   const [open, setOpen] = useState(false);
+  const [voiding, setVoiding] = useState<any>(null);
   const [f, setF] = useState({ payee: "", expense_date: today(), financial_account_id: "", reference: "", category: "", description: "", amount: "" });
   const [err, setErr] = useState<unknown>(null);
   const save = async () => {
@@ -95,8 +96,12 @@ function Expenses() {
     <Card padded={false} title="Expenses" actions={can("expenses.manage") && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>Record expense</Button>}>
       <DataTable rows={list.data?.items} loading={list.isLoading} error={list.error} columns={[
         { key: "number", header: "Number" }, { key: "expense_date", header: "Date", render: (e) => date(e.expense_date) }, { key: "payee", header: "Payee" },
-        { key: "desc", header: "Description", render: (e) => e.lines.map((l: any) => l.description).join("; ") }, { key: "total", header: "Amount", align: "right", render: (e) => money(e.total) },
+        { key: "desc", header: "Description", render: (e) => e.lines.map((l: any) => l.description).join("; ") }, { key: "total", header: "Amount", align: "right", render: (e) => <span className={e.status === "REVERSED" ? "text-slate-400 line-through" : ""}>{money(e.total)}</span> },
+        { key: "status", header: "", render: (e) => e.status === "REVERSED" ? <span title={e.void_reason ?? undefined}><Badge tone="red">Voided</Badge></span> : can("transactions.void") && <Button size="sm" variant="ghost" onClick={() => setVoiding(e)}>Void</Button> },
       ]} />
+      <ConfirmDialog open={!!voiding} danger requireReason title={`Void expense ${voiding?.number ?? ""}`} confirmLabel="Void expense"
+        message={<>This posts a reversing entry for <b>{voiding && money(voiding.total)}</b> to {voiding?.payee}; the expense stays on record, marked voided. To correct it, void it and record it again.</>}
+        onClose={() => setVoiding(null)} onConfirm={async (reason) => { await api(`/expenses/${voiding.id}/void`, { body: { reason } }); list.refetch(); toast("Expense voided"); }} />
       {list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.total} onPage={list.setPage} />}
       <Modal open={open} onClose={() => setOpen(false)} title="Record expense" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={save} disabled={!f.payee || !f.category || !f.amount || !f.financial_account_id}>Post expense</Button></>}>
         <div className="grid gap-3 sm:grid-cols-2">

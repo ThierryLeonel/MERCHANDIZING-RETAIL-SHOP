@@ -1,3 +1,5 @@
+import { DataController } from "./modules/data/data.controller";
+import { ImportService } from "./modules/data/import.service";
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
@@ -42,7 +44,7 @@ import { SystemController } from "./modules/system/system.controller";
 export const SERVICES = [
   PrismaService, AuditService, SequenceService, SettingsService, PostingService, ApprovalsService, StockLedgerService, PricingService,
   AuthService, CatalogueService, PurchasingService, InventoryService, SalesService, FinanceService, CustomersService, AccountingService,
-  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter,
+  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService,
 ];
 
 @Module({
@@ -52,7 +54,7 @@ export const SERVICES = [
   ],
   controllers: [
     AuthController, CatalogueController, PurchasingController, InventoryController, SalesController, FinanceController, CustomersController,
-    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController,
+    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController, DataController,
   ],
   providers: [
     ...SERVICES,

@@ -159,6 +159,8 @@ export class SalesService {
           if (!unitPrice.gt(0)) throw invalid("INVALID_PRICE", `${variant.sku}: enter a price above zero`);
           source = negotiable ? "NEGOTIATED" : "MANUAL_OVERRIDE";
         }
+        // Products imported or created without a selling price cannot be sold until one is set.
+        if (!unitPrice.gt(0) && l.override_price == null) throw invalid("PRICE_NOT_SET", `${variant.sku} (${variant.name}) has no selling price yet — set its price in Products first`, { variant_id: variant.id });
         const gross = money(unitPrice.times(q), dec);
         let discount = ZERO;
         if (l.discount_percent != null) discount = money(gross.times(D(l.discount_percent)).div(100), dec);
@@ -538,8 +540,38 @@ export class SalesService {
    * line amounts pro rata; restocks at the ORIGINAL line cost (not today's
    * price); classifies stock by condition; posts a reversing journal.
    */
-  async returnSale(auth: AuthContext, input: ReturnInput, idempotencyKey?: string) {
-    assertCan(auth, "pos.return");
+  /**
+   * Voids a completed sale: everything not yet returned comes back into stock at
+   * its original cost and the money is refunded/credited, through the normal
+   * return document (so stock, cash and the ledger stay reconciled). The sale
+   * record is kept and marked voided. Requires transactions.void; no approvals.
+   */
+  async voidSale(auth: AuthContext, saleId: string, input: { reason: string; refund_method: PaymentMethod; financial_account_id?: string; reference?: string; register_id?: string; restock?: boolean }) {
+    assertCan(auth, "transactions.void", "Voiding sales requires transactions.void");
+    if (!input.reason?.trim()) throw invalid("REASON_REQUIRED", "Enter the reason for voiding this sale");
+    const sale = await this.prisma.client.sale.findFirst({ where: { id: saleId, business_id: auth.businessId }, include: { lines: true } });
+    if (!sale) throw notFound("Sale");
+    assertBranch(auth, sale.branch_id);
+    if (sale.voided_at) throw invalid("ALREADY_VOIDED", `${sale.number} is already voided`);
+    if (sale.status !== "COMPLETED") throw invalid("SALE_NOT_COMPLETED", sale.status === "PENDING_PAYMENT" ? "Cancel the pending sale instead" : "Only completed sales can be voided");
+    const lines = sale.lines
+      .map((l) => ({ sale_line_id: l.id, quantity: D(l.quantity_base).minus(l.qty_returned_base).toString(), condition: (input.restock === false ? "NON_RESTOCKABLE" : "SELLABLE") as ReturnInput["lines"][number]["condition"] }))
+      .filter((l) => D(l.quantity).gt(0));
+    const markVoided = async (tx: Tx, returnId: string | null) => {
+      await tx.sale.update({ where: { id: sale.id }, data: { voided_at: new Date(), voided_by_id: auth.userId, void_reason: input.reason.trim(), void_return_id: returnId } });
+      await this.audit.record(auth, { action: "sale.voided", entityType: "sale", entityId: sale.id, summary: `${sale.number} voided: ${input.reason.trim()}`, branchId: sale.branch_id, data: { return_id: returnId, refund_method: input.refund_method } }, tx);
+    };
+    if (!lines.length) {
+      // Everything was already returned — nothing left to refund; just record the void.
+      await this.prisma.tx((tx) => markVoided(tx, null));
+    } else {
+      await this.returnSale(auth, { sale_id: sale.id, register_id: input.register_id, reason: `Void: ${input.reason.trim()}`, refund_method: input.refund_method, financial_account_id: input.financial_account_id, reference: input.reference ?? `Void ${sale.number}`, lines }, undefined, { asVoid: markVoided });
+    }
+    return this.getSale(auth, sale.id);
+  }
+
+  async returnSale(auth: AuthContext, input: ReturnInput, idempotencyKey?: string, opts: { asVoid?: (tx: Tx, returnId: string) => Promise<void> } = {}) {
+    if (!opts.asVoid) assertCan(auth, "pos.return");
     if (!input.reason?.trim()) throw invalid("REASON_REQUIRED", "A return reason is required");
     const b = await this.settings.business(auth.businessId);
     const dec = b.currency_decimals;
@@ -549,6 +581,7 @@ export class SalesService {
       if (!sale) throw notFound("Sale");
       assertBranch(auth, sale.branch_id);
       if (sale.status !== "COMPLETED") throw invalid("SALE_NOT_COMPLETED", "Only completed sales can be returned");
+      if (sale.voided_at && !opts.asVoid) throw invalid("SALE_VOIDED", `${sale.number} was voided`);
       const ageDays = (Date.now() - sale.completed_at!.getTime()) / 86_400_000;
       const locations = await tx.location.findMany({ where: { branch_id: sale.branch_id, active: true } });
       const quarantine = locations.find((l) => l.kind === "QUARANTINE");
@@ -577,7 +610,7 @@ export class SalesService {
       }
       const refundNet = sum(lines, (l) => l.net), refundTax = sum(lines, (l) => l.tax), refundTotal = refundNet.plus(refundTax);
       const costTotal = sum(lines, (l) => l.cost);
-      const needsApproval = (await this.approvals.isRequired(tx, auth.businessId, "REFUND", { amount: refundTotal })) || ageDays > policies.return_window_days;
+      const needsApproval = !opts.asVoid && ((await this.approvals.isRequired(tx, auth.businessId, "REFUND", { amount: refundTotal })) || ageDays > policies.return_window_days);
       let approvedBy: string | null = null;
       if (needsApproval) {
         if (!input.approval_request_id) throw new ApprovalRequiredError("REFUND", ageDays > policies.return_window_days ? `Sale is outside the ${policies.return_window_days}-day return window` : `Refund ${refundTotal} exceeds the approval threshold`, { amount: refundTotal.toString(), sale_id: sale.id });
@@ -592,7 +625,13 @@ export class SalesService {
         const rate = l.saleLine.tax_rate_id ? await tx.taxRate.findUnique({ where: { id: l.saleLine.tax_rate_id } }) : null;
         jl.push(rate?.output_account_id ? { accountId: rate.output_account_id, debit: l.tax, memo: "Output tax reversal" } : { account: "output_tax", debit: l.tax, memo: "Output tax reversal" });
       }
-      if (input.refund_method === "CASH") {
+      if (input.refund_method === "CASH" && opts.asVoid && input.financial_account_id) {
+        // Void refunded in cash from a chosen account (e.g. the safe) when the administrator has no till open.
+        const fa = await tx.financialAccount.findFirst({ where: { id: input.financial_account_id, business_id: auth.businessId, active: true } });
+        if (!fa) throw notFound("Financial account");
+        if (fa.kind === "TILL") throw invalid("TILL_NOT_ALLOWED", "To refund from a till, open a session on it; otherwise choose the safe or another cash account");
+        refundAccountId = fa.id;
+      } else if (input.refund_method === "CASH") {
         const { register, session } = await this.openSessionFor(tx, auth, input.register_id ?? sale.register_id!, sale.branch_id);
         refundAccountId = register.till_account_id; sessionId = session.id;
         const till = await this.finance.sessionSummary(tx, session.id);
@@ -644,6 +683,7 @@ export class SalesService {
         await tx.refund.create({ data: { business_id: auth.businessId, sales_return_id: ret.id, method: input.refund_method, amount: refundTotal, financial_account_id: refundAccountId, reference: input.reference ?? null, cashier_session_id: sessionId, created_by_id: auth.userId } });
       }
       await this.audit.record(auth, { action: "sale.returned", entityType: "sales_return", entityId: ret.id, summary: `${number}: refund ${refundTotal} on ${sale.number}`, branchId: sale.branch_id, data: { reason: input.reason, lines: input.lines } }, tx);
+      if (opts.asVoid) await opts.asVoid(tx, ret.id);
       return ret.id;
     }, { timeout: 60_000 });
     return this.prisma.client.salesReturn.findUniqueOrThrow({ where: { id }, include: { lines: true } });
@@ -655,17 +695,18 @@ export class SalesService {
     if (!sale) throw notFound("Sale");
     assertBranch(auth, sale.branch_id);
     const showCost = can(auth, "products.view_cost");
-    const [customer, cashier, branch, returns] = await Promise.all([
+    const [customer, cashier, branch, returns, voidedBy] = await Promise.all([
       sale.customer_id ? this.prisma.client.customer.findUnique({ where: { id: sale.customer_id }, select: { id: true, name: true, phone: true, code: true } }) : null,
       this.prisma.client.user.findUnique({ where: { id: sale.cashier_id }, select: { full_name: true } }),
       this.prisma.client.branch.findUnique({ where: { id: sale.branch_id } }),
       this.prisma.client.salesReturn.findMany({ where: { sale_id: id }, select: { id: true, number: true, refund_total: true, created_at: true } }),
+      sale.voided_by_id ? this.prisma.client.user.findUnique({ where: { id: sale.voided_by_id }, select: { full_name: true } }) : null,
     ]);
     return {
       ...sale,
       cost_total: showCost ? sale.cost_total : undefined,
       lines: sale.lines.map((l) => ({ ...l, unit_cost: showCost ? l.unit_cost : undefined, cost_amount: showCost ? l.cost_amount : undefined, returnable_base: D(l.quantity_base).minus(l.qty_returned_base) })),
-      customer, cashier_name: cashier?.full_name, branch, returns,
+      customer, cashier_name: cashier?.full_name, branch, returns, voided_by_name: voidedBy?.full_name ?? null,
       simulator: config.mobileMoneyMode === "simulator",
     };
   }
@@ -678,7 +719,7 @@ export class SalesService {
       ...(q.search ? { number: { contains: q.search, mode: "insensitive" } } : {}),
       ...(q.from || q.to ? { created_at: { ...(q.from ? { gte: new Date(q.from) } : {}), ...(q.to ? { lt: new Date(q.to) } : {}) } } : {}),
     };
-    const page = await paginate(q, this.prisma.client.sale.count({ where }), this.prisma.client.sale.findMany({ where, ...pageArgs(q), orderBy: { created_at: "desc" }, select: { id: true, number: true, status: true, total: true, created_at: true, completed_at: true, customer_id: true, cashier_id: true, branch_id: true, credit_amount: true, credit_settled: true } }));
+    const page = await paginate(q, this.prisma.client.sale.count({ where }), this.prisma.client.sale.findMany({ where, ...pageArgs(q), orderBy: { created_at: "desc" }, select: { id: true, number: true, status: true, total: true, created_at: true, completed_at: true, customer_id: true, cashier_id: true, branch_id: true, credit_amount: true, credit_settled: true, voided_at: true, void_reason: true } }));
     const [customers, users] = await Promise.all([
       this.prisma.client.customer.findMany({ where: { id: { in: page.items.map((s) => s.customer_id).filter(Boolean) as string[] } }, select: { id: true, name: true } }),
       this.prisma.client.user.findMany({ where: { id: { in: page.items.map((s) => s.cashier_id) } }, select: { id: true, full_name: true } }),

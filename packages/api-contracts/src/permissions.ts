@@ -59,6 +59,8 @@ export const PERMISSIONS = [
   { code: "admin.roles", module: "admin", description: "Manage roles and permissions" },
   { code: "admin.settings", module: "admin", description: "Business settings, branches, registers, taxes" },
   { code: "admin.audit", module: "admin", description: "View audit log" },
+  { code: "transactions.void", module: "admin", description: "Void sales, expenses and payments (posts reversing entries; records are kept)", sensitive: true },
+  { code: "data.import", module: "admin", description: "Import products, opening stock and customers from spreadsheets", sensitive: true },
 ] as const satisfies readonly PermissionDef[];
 
 export type PermissionCode = (typeof PERMISSIONS)[number]["code"];

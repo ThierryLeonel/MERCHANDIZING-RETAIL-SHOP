@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ArrayMinSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from "class-validator";
@@ -188,6 +188,48 @@ export class CatalogueController {
       this.prisma.client.priceList.findMany({ where: b, orderBy: { code: "asc" } }),
     ]);
     return { departments, categories, brands, units, tax_rates, attributes, suppliers, price_lists };
+  }
+
+  @Delete("products/:id") @RequirePermissions("products.manage")
+  deleteProduct(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.deleteProduct(a, id); }
+
+  /** Deletes an unused category (no products, no sub-categories), department, brand or unit. */
+  @Delete("catalogue/:kind/:id") @RequirePermissions("products.manage")
+  async deleteRef(@Auth() a: AuthContext, @Param("kind") kind: string, @Param("id", ParseUUIDPipe) id: string) {
+    const b = a.businessId, db = this.prisma.client;
+    const used = (what: string) => invalid("IN_USE", `This ${what} is still used — move or delete what uses it first, or mark it inactive`);
+    let name: string;
+    try {
+      switch (kind) {
+        case "categories": {
+          const c = await db.category.findFirst({ where: { id, business_id: b } }); if (!c) throw notFound("Category");
+          if (await db.product.count({ where: { category_id: id } })) throw invalid("IN_USE", `"${c.name}" still has products — move them to another category first`);
+          if (await db.category.count({ where: { parent_id: id } })) throw invalid("IN_USE", `"${c.name}" has sub-categories — delete or move them first`);
+          await db.category.delete({ where: { id } }); name = c.name; break;
+        }
+        case "departments": {
+          const d = await db.department.findFirst({ where: { id, business_id: b } }); if (!d) throw notFound("Department");
+          if (await db.product.count({ where: { department_id: id } }) + await db.category.count({ where: { department_id: id } })) throw used("department");
+          await db.department.delete({ where: { id } }); name = d.name; break;
+        }
+        case "brands": {
+          const r = await db.brand.findFirst({ where: { id, business_id: b } }); if (!r) throw notFound("Brand");
+          if (await db.product.count({ where: { brand_id: id } })) throw used("brand");
+          await db.brand.delete({ where: { id } }); name = r.name; break;
+        }
+        case "units": {
+          const u = await db.unit.findFirst({ where: { id, business_id: b } }); if (!u) throw notFound("Unit");
+          if (await db.product.count({ where: { base_unit_id: id } }) + await db.variantUnitConversion.count({ where: { unit_id: id } })) throw used("unit");
+          await db.unit.delete({ where: { id } }); name = u.name; break;
+        }
+        default: throw notFound(`Reference type ${kind}`);
+      }
+    } catch (e: any) {
+      if (e?.code === "P2003" || /foreign key/i.test(String(e?.message))) throw used(kind.replace(/s$/, ""));
+      throw e;
+    }
+    await this.audit.record(a, { action: `${kind}.deleted`, entityType: kind, entityId: id, summary: `${kind} "${name}" deleted` });
+    return { id, deleted: true };
   }
 
   /** Categories with parent, department and product counts (for the catalogue setup screen). */

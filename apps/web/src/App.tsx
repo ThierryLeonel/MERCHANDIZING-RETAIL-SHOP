@@ -12,6 +12,8 @@ const Products = lazy(() => import("./pages/products/ProductsPage"));
 const ProductDetail = lazy(() => import("./pages/products/ProductDetail"));
 const ProductForm = lazy(() => import("./pages/products/ProductForm"));
 const CatalogueSetup = lazy(() => import("./pages/products/CatalogueSetupPage"));
+const ImportPage = lazy(() => import("./pages/data/ImportPage"));
+const SalesPage = lazy(() => import("./pages/pos/SalesPage"));
 const Inventory = lazy(() => import("./pages/inventory/InventoryPage"));
 const Purchasing = lazy(() => import("./pages/purchasing/PurchasingPage"));
 const PurchaseOrderDetail = lazy(() => import("./pages/purchasing/PurchaseOrderDetail"));
@@ -41,6 +43,7 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/pos" element={<Pos />} />
           <Route path="/pos/returns" element={<Returns />} />
+          <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/:id" element={<SaleDetail />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/new" element={<ProductForm />} />
@@ -59,6 +62,7 @@ export function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/account" element={<Account />} />
           <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
         </Routes>

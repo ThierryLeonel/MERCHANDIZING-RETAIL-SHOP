@@ -6,7 +6,7 @@ import { Auth, AuthContext, RequirePermissions } from "../../common/auth-context
 import { AuditService } from "../../common/audit.service";
 import { notFound } from "../../common/errors";
 import { Idempotent } from "../../common/idempotency";
-import { PageQuery } from "../../common/pagination";
+import { PageQuery, pageArgs, paginate } from "../../common/pagination";
 import { PrismaService } from "../../common/prisma.service";
 import { IsDecimalValue } from "../../common/validators";
 import { PurchasingService } from "./purchasing.service";
@@ -92,6 +92,8 @@ class SupplierDocQuery extends PageQuery { @IsOptional() @IsUUID() supplier_id?:
 
 @ApiTags("purchasing")
 @ApiBearerAuth()
+class VoidReasonDto { @IsString() @MinLength(3) reason: string }
+
 @Controller()
 export class PurchasingController {
   constructor(private svc: PurchasingService, private prisma: PrismaService, private audit: AuditService) {}
@@ -111,7 +113,10 @@ export class PurchasingController {
     const s = await this.prisma.client.supplier.findFirst({ where: { id, business_id: a.businessId } });
     if (!s) throw notFound("Supplier");
     const balance = a.permissions.has("payables.manage") || a.permissions.has("reports.financial") ? await this.svc.supplierBalance(a, id) : null;
-    return { ...s, balance };
+    const payments = a.permissions.has("payables.manage") || a.permissions.has("reports.financial")
+      ? await this.prisma.client.supplierPayment.findMany({ where: { supplier_id: id, business_id: a.businessId }, orderBy: { created_at: "desc" }, take: 100 })
+      : [];
+    return { ...s, balance, payments };
   }
 
   @Patch("suppliers/:id") @RequirePermissions("suppliers.manage")
@@ -153,6 +158,17 @@ export class PurchasingController {
 
   @Post("supplier-invoices") @Idempotent() @RequirePermissions("payables.manage")
   postInvoice(@Auth() a: AuthContext, @Body() dto: InvoiceDto) { return this.svc.postInvoice(a, dto); }
+
+  @Get("supplier-payments") @RequirePermissions("purchasing.view")
+  async supplierPayments(@Auth() a: AuthContext, @Query() q: PageQuery) {
+    const where = { business_id: a.businessId, ...(a.allBranches ? {} : { branch_id: { in: a.branchIds } }), ...(q.search ? { OR: [{ number: { contains: q.search, mode: "insensitive" as const } }, { reference: { contains: q.search, mode: "insensitive" as const } }] } : {}) };
+    const page = await paginate(q, this.prisma.client.supplierPayment.count({ where }), this.prisma.client.supplierPayment.findMany({ where, ...pageArgs(q), orderBy: { created_at: "desc" } }));
+    const sups = await this.prisma.client.supplier.findMany({ where: { id: { in: page.items.map((p) => p.supplier_id) } }, select: { id: true, name: true } });
+    return { ...page, items: page.items.map((p) => ({ ...p, supplier_name: sups.find((s) => s.id === p.supplier_id)?.name })) };
+  }
+
+  @Post("supplier-payments/:id/void") @HttpCode(200) @RequirePermissions("transactions.void")
+  voidSupplierPayment(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: VoidReasonDto) { return this.svc.voidSupplierPayment(a, id, dto.reason); }
 
   @Post("supplier-payments") @Idempotent() @RequirePermissions("payables.manage")
   pay(@Auth() a: AuthContext, @Body() dto: SupplierPaymentDto) { return this.svc.paySupplier(a, dto); }

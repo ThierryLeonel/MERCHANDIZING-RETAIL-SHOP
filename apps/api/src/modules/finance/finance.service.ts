@@ -279,6 +279,24 @@ export class FinanceService {
     });
   }
 
+  /** Voids a posted expense: mirror-image reversal dated today; the expense stays on record as REVERSED. */
+  async voidExpense(auth: AuthContext, id: string, reason: string) {
+    assertCan(auth, "transactions.void", "Voiding expenses requires transactions.void");
+    if (!reason?.trim()) throw invalid("REASON_REQUIRED", "Enter the reason for voiding this expense");
+    const b = await this.settings.business(auth.businessId);
+    return this.prisma.tx(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM expenses WHERE id = ${id}::uuid FOR UPDATE`;
+      const e = await tx.expense.findFirst({ where: { id, business_id: auth.businessId } });
+      if (!e) throw notFound("Expense");
+      assertBranch(auth, e.branch_id);
+      if (e.status !== "POSTED") throw invalid("ALREADY_VOIDED", `${e.number} is already voided`);
+      if (e.journal_entry_id) await this.posting.reverse(tx, e.journal_entry_id, { date: businessDate(new Date(), b.timezone), reason: `Void ${e.number}: ${reason.trim()}`, userId: auth.userId, currencyDecimals: b.currency_decimals });
+      await tx.expense.update({ where: { id }, data: { status: "REVERSED", voided_at: new Date(), voided_by_id: auth.userId, void_reason: reason.trim() } });
+      await this.audit.record(auth, { action: "expense.voided", entityType: "expense", entityId: id, summary: `${e.number} voided: ${reason.trim()}`, branchId: e.branch_id }, tx);
+      return tx.expense.findUniqueOrThrow({ where: { id }, include: { lines: true } });
+    });
+  }
+
   listExpenses(auth: AuthContext, q: PageQuery) {
     const where: Prisma.ExpenseWhereInput = { business_id: auth.businessId, ...branchFilter(auth), ...(q.search ? { OR: [{ payee: { contains: q.search, mode: "insensitive" } }, { number: { contains: q.search, mode: "insensitive" } }] } : {}) };
     return paginate(q, this.prisma.client.expense.count({ where }), this.prisma.client.expense.findMany({ where, ...pageArgs(q), orderBy: { expense_date: "desc" }, include: { lines: true } }));

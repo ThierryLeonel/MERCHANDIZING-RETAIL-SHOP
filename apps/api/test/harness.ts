@@ -1,3 +1,4 @@
+import { ImportService } from "../src/modules/data/import.service";
 import "reflect-metadata";
 import { INestApplicationContext } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -66,7 +67,7 @@ export async function makeWorld(opts: { pricesIncludeTax?: boolean } = {}) {
   const svc = {
     catalogue: app.get(CatalogueService), purchasing: app.get(PurchasingService), inventory: app.get(InventoryService), sales: app.get(SalesService),
     finance: app.get(FinanceService), customers: app.get(CustomersService), accounting: app.get(AccountingService), approvals: app.get(ApprovalsService),
-    pricing: app.get(PricingService), posting: app.get(PostingService),
+    pricing: app.get(PricingService), posting: app.get(PostingService), imports: app.get(ImportService),
   };
   const loc = async (branchId: string, code: string) => db.location.findFirstOrThrow({ where: { branch_id: branchId, code } });
 

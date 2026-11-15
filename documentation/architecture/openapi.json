@@ -307,6 +307,32 @@
         "tags": [
           "catalogue"
         ]
+      },
+      "delete": {
+        "operationId": "CatalogueController_deleteProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalogue"
+        ]
       }
     },
     "/api/v1/products/{id}/variants": {
@@ -514,6 +540,86 @@
         ]
       }
     },
+    "/api/v1/catalogue/{kind}/{id}": {
+      "delete": {
+        "operationId": "CatalogueController_deleteRef",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalogue"
+        ]
+      },
+      "patch": {
+        "operationId": "CatalogueController_updateRef",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRefDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalogue"
+        ]
+      }
+    },
     "/api/v1/catalogue/categories": {
       "get": {
         "operationId": "CatalogueController_categories",
@@ -558,52 +664,6 @@
         },
         "responses": {
           "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "catalogue"
-        ]
-      }
-    },
-    "/api/v1/catalogue/{kind}/{id}": {
-      "patch": {
-        "operationId": "CatalogueController_updateRef",
-        "parameters": [
-          {
-            "name": "kind",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRefDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
             "description": ""
           }
         },
@@ -736,13 +796,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       },
       "post": {
@@ -763,13 +818,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -791,13 +841,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       },
       "patch": {
@@ -817,13 +862,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -882,13 +922,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       },
       "post": {
@@ -909,13 +944,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -937,13 +967,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -975,13 +1000,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -1013,13 +1033,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -1051,13 +1066,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -1116,13 +1126,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       },
       "post": {
@@ -1152,13 +1157,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -1217,13 +1217,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       },
       "post": {
@@ -1244,17 +1239,70 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
     "/api/v1/supplier-payments": {
+      "get": {
+        "operationId": "PurchasingController_supplierPayments",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "default": 25
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Purchasing"
+        ]
+      },
       "post": {
         "operationId": "PurchasingController_pay",
         "parameters": [],
@@ -1273,13 +1321,41 @@
             "description": ""
           }
         },
-        "security": [
+        "tags": [
+          "Purchasing"
+        ]
+      }
+    },
+    "/api/v1/supplier-payments/{id}/void": {
+      "post": {
+        "operationId": "PurchasingController_voidSupplierPayment",
+        "parameters": [
           {
-            "bearer": []
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
         "tags": [
-          "purchasing"
+          "Purchasing"
         ]
       }
     },
@@ -2312,6 +2388,44 @@
         ]
       }
     },
+    "/api/v1/sales/{id}/void": {
+      "post": {
+        "operationId": "SalesController_voidSale",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidSaleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "sales"
+        ]
+      }
+    },
     "/api/v1/payments/{id}/confirm": {
       "post": {
         "operationId": "SalesController_confirm",
@@ -2599,13 +2713,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2618,13 +2727,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2683,13 +2787,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       },
       "post": {
@@ -2710,13 +2809,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2738,13 +2832,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2776,13 +2865,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2814,13 +2898,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2833,13 +2912,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2852,13 +2926,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2881,13 +2950,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2946,13 +3010,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       },
       "post": {
@@ -2973,13 +3032,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -2992,13 +3046,41 @@
             "description": ""
           }
         },
-        "security": [
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/expenses/{id}/void": {
+      "post": {
+        "operationId": "FinanceController_voidExpense",
+        "parameters": [
           {
-            "bearer": []
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
         "tags": [
-          "finance"
+          "Finance"
         ]
       }
     },
@@ -3057,13 +3139,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       },
       "post": {
@@ -3084,13 +3161,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
@@ -3103,13 +3175,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
@@ -3122,13 +3189,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
@@ -3150,13 +3212,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       },
       "patch": {
@@ -3186,13 +3243,29 @@
             "description": ""
           }
         },
-        "security": [
+        "tags": [
+          "Customers"
+        ]
+      },
+      "delete": {
+        "operationId": "CustomersController_remove",
+        "parameters": [
           {
-            "bearer": []
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
@@ -3214,17 +3287,33 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
     "/api/v1/customers/{id}/payments": {
+      "get": {
+        "operationId": "CustomersController_payments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Customers"
+        ]
+      },
       "post": {
         "operationId": "CustomersController_pay",
         "parameters": [
@@ -3252,13 +3341,41 @@
             "description": ""
           }
         },
-        "security": [
+        "tags": [
+          "Customers"
+        ]
+      }
+    },
+    "/api/v1/customers/payments/{paymentId}/void": {
+      "post": {
+        "operationId": "CustomersController_voidPayment",
+        "parameters": [
           {
-            "bearer": []
+            "name": "paymentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
         "tags": [
-          "customers"
+          "Customers"
         ]
       }
     },
@@ -4719,6 +4836,131 @@
           "system"
         ]
       }
+    },
+    "/api/v1/imports/products/export": {
+      "get": {
+        "operationId": "DataController_exportProducts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/customers/export": {
+      "get": {
+        "operationId": "DataController_exportCustomers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/products": {
+      "post": {
+        "operationId": "DataController_products",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/stock": {
+      "post": {
+        "operationId": "DataController_stock",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/customers": {
+      "post": {
+        "operationId": "DataController_customers",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
     }
   },
   "info": {
@@ -4798,6 +5040,10 @@
         "type": "object",
         "properties": {}
       },
+      "VoidReasonDto": {
+        "type": "object",
+        "properties": {}
+      },
       "SupplierPaymentDto": {
         "type": "object",
         "properties": {}
@@ -4843,6 +5089,10 @@
         "properties": {}
       },
       "PaymentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "VoidSaleDto": {
         "type": "object",
         "properties": {}
       },
@@ -4947,6 +5197,18 @@
         "properties": {}
       },
       "OverrideDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ProductImportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "StockImportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ImportDto": {
         "type": "object",
         "properties": {}
       }

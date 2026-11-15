@@ -1,3 +1,4 @@
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import "reflect-metadata";
 import { INestApplication, Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
@@ -9,7 +10,9 @@ import { AppModule } from "./app.module";
 import { config } from "./config";
 
 export async function createApp(opts: { logger?: boolean } = {}): Promise<INestApplication> {
-  const app = await NestFactory.create(AppModule, { logger: opts.logger === false ? false : ["log", "warn", "error"], rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: opts.logger === false ? false : ["log", "warn", "error"], rawBody: true });
+  // Spreadsheet imports send a few thousand rows as JSON.
+  app.useBodyParser("json", { limit: "5mb" });
   app.setGlobalPrefix("api/v1");
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());

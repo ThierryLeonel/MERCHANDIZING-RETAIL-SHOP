@@ -1,6 +1,6 @@
 import { ImagePlus, Package } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorState, ErrorText, Field, Input, Modal, PageHeader, Spinner, Status, useToast } from "../../components/ui";
 import { api, getAccessToken } from "../../lib/api";
 import { humanize, money, qty } from "../../lib/format";
@@ -25,6 +25,8 @@ export default function ProductDetail() {
   const { data: p, isLoading, error, refetch } = useApi<any>(`/products/${id}`);
   const [editing, setEditing] = useState<any>(null);
   const [discontinue, setDiscontinue] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   const [uploadErr, setUploadErr] = useState<unknown>(null);
   if (isLoading) return <Spinner />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
@@ -40,7 +42,13 @@ export default function ProductDetail() {
   };
   return (
     <div className="space-y-5">
-      <PageHeader title={p.name} subtitle={<>{p.code} · {p.product_type === "BULK" ? "Bulk / loose goods" : humanize(p.product_type)} · base unit {p.base_unit_code} · <Status value={p.status} /></>} actions={can("products.manage") && p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setDiscontinue(true)}>Discontinue</Button>} />
+      <PageHeader title={p.name} subtitle={<>{p.code} · {p.product_type === "BULK" ? "Bulk / loose goods" : humanize(p.product_type)} · base unit {p.base_unit_code} · <Status value={p.status} /></>} actions={can("products.manage") && <>
+        {p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setDiscontinue(true)}>Discontinue</Button>}
+        <Button variant="ghost" className="text-red-700" onClick={() => setDeleting(true)}>Delete</Button>
+      </>} />
+      <ConfirmDialog open={deleting} danger title={`Delete ${p.name}?`} confirmLabel="Delete product"
+        message="This removes the product completely. Only products that were never bought, sold, counted or stocked can be deleted — for anything with history, use Discontinue (it disappears from the POS but stays in reports)."
+        onClose={() => setDeleting(false)} onConfirm={async () => { await api(`/products/${p.id}`, { method: "DELETE" }); toast(`${p.name} deleted`); navigate("/products"); }} />
       <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
         <Card>
           <ProductImage attachmentId={p.image_attachment_id} className="h-44 w-full" />

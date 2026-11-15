@@ -35,6 +35,20 @@ These policies are implemented in code and verified by tests. Change them only w
 - Refund = the original line's net and tax amounts pro rata (the final unit takes the exact remainder). Returns outside the return window (setting) or above the refund threshold need approval.
 - Exchanges are recorded as a linked return followed by a new sale.
 
+## Voids and corrections (no deletion of posted transactions)
+Posted transactions are never deleted or edited in place: the stock ledger, journals and audit log are append-only (enforced by database triggers), and completed sales are immutable. An administrator holding `transactions.void` (granted to the Owner role by default) can instead **void** a transaction; the original stays on record, marked voided, with who/when/why, and a reversing entry is posted **dated the day of the void** (so closed periods are never changed):
+
+| Transaction | What a void does |
+|---|---|
+| Sale | A full return of everything not yet returned (stock back at original cost to sellable stock, or written off if "put back into stock" is unticked) and a refund: cash from the voider's open till, cash from the safe/petty cash, mobile money / bank / card from a chosen account, or to the customer's account (reduces the receivable first, then store credit). No approval thresholds apply — the voider holds the authority. The sale shows *Voided*; further returns against it are refused. |
+| Expense | Mirror-image reversal of its journal; status `REVERSED`. |
+| Customer account payment | Allocations to credit sales are undone (they become outstanding again) and the journal is reversed. Refused if the unapplied part was already used as store credit. |
+| Supplier payment | Invoice allocations are undone (invoices become outstanding again) and the journal is reversed. |
+
+**Editing** a posted transaction = void it, then enter it again correctly. On a sale, *Void & re-enter* voids it and opens its items in the POS (agreed/overridden prices kept, discounts to be re-applied).
+
+**Deleting** is only possible for records that were never used: products with no stock movements, purchases or sales (otherwise *Discontinue*), categories with no products or sub-categories, departments/brands/units not in use, and customers with no sales, payments or held carts (otherwise mark inactive).
+
 ## Customer credit
 - Credit sales require an ACTIVE credit account and permission `pos.credit_sale`. Exceeding the limit requires a `CUSTOMER_CREDIT` approval for at least the excess.
 - Unapplied customer payments and store credit are customer deposits (liability).

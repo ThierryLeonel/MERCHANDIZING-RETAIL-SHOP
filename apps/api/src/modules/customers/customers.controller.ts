@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Min, MinLength, ValidateNested } from "class-validator";
@@ -27,6 +27,8 @@ class CustomerPaymentDto {
 
 @ApiTags("customers")
 @ApiBearerAuth()
+class VoidReasonDto { @IsString() @MinLength(3) reason: string }
+
 @Controller("customers")
 export class CustomersController {
   constructor(private svc: CustomersService) {}
@@ -37,5 +39,9 @@ export class CustomersController {
   @Get(":id") @RequirePermissions("customers.view") get(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.get(a, id); }
   @Patch(":id") @RequirePermissions("customers.manage") update(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateCustomerDto) { return this.svc.update(a, id, dto); }
   @Get(":id/statement") @RequirePermissions("customers.view") statement(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.statement(a, id); }
+  @Delete(":id") @RequirePermissions("customers.manage") remove(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.remove(a, id); }
+  @Get(":id/payments") @RequirePermissions("customers.view") payments(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.svc.payments(a, id); }
+  @Post("payments/:paymentId/void") @HttpCode(200) @RequirePermissions("transactions.void")
+  voidPayment(@Auth() a: AuthContext, @Param("paymentId", ParseUUIDPipe) id: string, @Body() dto: VoidReasonDto) { return this.svc.voidPayment(a, id, dto.reason); }
   @Post(":id/payments") @Idempotent() @RequirePermissions("customers.credit") pay(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: CustomerPaymentDto) { return this.svc.receivePayment(a, id, dto); }
 }

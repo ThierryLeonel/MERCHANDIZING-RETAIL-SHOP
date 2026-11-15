@@ -40,6 +40,8 @@ class SessionQuery extends PageQuery { @IsOptional() @IsString() status?: string
 
 @ApiTags("finance")
 @ApiBearerAuth()
+class VoidReasonDto { @IsString() @MinLength(3) reason: string }
+
 @Controller()
 export class FinanceController {
   constructor(private svc: FinanceService, private prisma: PrismaService) {}
@@ -85,6 +87,9 @@ export class FinanceController {
 
   @Get("expense-categories") @RequirePermissions("expenses.manage")
   categories(@Auth() a: AuthContext) { return this.prisma.client.expenseCategory.findMany({ where: { business_id: a.businessId, active: true }, orderBy: { name: "asc" } }); }
+
+  @Post("expenses/:id/void") @HttpCode(200) @RequirePermissions("transactions.void")
+  voidExpense(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: VoidReasonDto) { return this.svc.voidExpense(a, id, dto.reason); }
 
   @Post("expenses") @Idempotent() @RequirePermissions("expenses.manage")
   expense(@Auth() a: AuthContext, @Body() dto: ExpenseDto) { return this.svc.createExpense(a, dto); }

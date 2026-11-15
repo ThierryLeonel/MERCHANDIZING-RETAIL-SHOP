@@ -3,7 +3,7 @@ import type { Prisma, Tx } from "@retail/db";
 import { AuthContext, assertBranch, assertCan } from "../../common/auth-context";
 import { AuditService } from "../../common/audit.service";
 import { invalid, notFound } from "../../common/errors";
-import { D, money, ZERO } from "../../common/money";
+import { D, money, sum, ZERO } from "../../common/money";
 import { PageQuery, pageArgs, paginate, orderBy } from "../../common/pagination";
 import { PrismaService } from "../../common/prisma.service";
 import { SequenceService } from "../../common/sequence.service";
@@ -100,6 +100,65 @@ export class CustomersService {
       await this.audit.record(auth, { action: "customer.payment", entityType: "customer", entityId: c.id, summary: `${number}: ${amount} received (${unallocated} unapplied)`, branchId: input.branch_id }, tx);
       return { payment_id: payment.id, number, allocated, unallocated };
     });
+  }
+
+  /**
+   * Voids an account payment received from a customer: allocations to credit
+   * sales are undone (the sales become outstanding again) and the journal is
+   * reversed. Refused if the unapplied part has since been used as store credit.
+   */
+  async voidPayment(auth: AuthContext, paymentId: string, reason: string) {
+    assertCan(auth, "transactions.void", "Voiding payments requires transactions.void");
+    if (!reason?.trim()) throw invalid("REASON_REQUIRED", "Enter the reason for voiding this payment");
+    const b = await this.settings.business(auth.businessId);
+    return this.prisma.tx(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM payments WHERE id = ${paymentId}::uuid FOR UPDATE`;
+      const p = await tx.payment.findFirst({ where: { id: paymentId, business_id: auth.businessId, sale_id: null, customer_id: { not: null } } });
+      if (!p) throw notFound("Customer account payment");
+      assertBranch(auth, p.branch_id);
+      if (p.status !== "CONFIRMED" || p.voided_at) throw invalid("ALREADY_VOIDED", "This payment is already voided");
+      const journal = await tx.journalEntry.findFirst({ where: { business_id: auth.businessId, source_type: "customer_payment", source_id: p.id, reversal_of_id: null } });
+      if (!journal) throw invalid("NO_JOURNAL", "The payment's journal entry was not found");
+      const allocations = await tx.salePaymentAllocation.findMany({ where: { payment_id: p.id } });
+      const allocated = sum(allocations, (a) => D(a.amount));
+      const unapplied = D(p.amount).minus(allocated);
+      if (unapplied.gt(0)) {
+        const { deposits } = await this.balances(tx, auth.businessId, p.customer_id!);
+        if (deposits.lessThan(unapplied)) throw invalid("DEPOSIT_USED", `The unapplied ${unapplied} has already been used as store credit (only ${deposits} left), so this payment cannot be voided`);
+      }
+      for (const a of allocations) {
+        await tx.$queryRaw`SELECT id FROM sales WHERE id = ${a.sale_id}::uuid FOR UPDATE`;
+        const sale = await tx.sale.findUniqueOrThrow({ where: { id: a.sale_id } });
+        const settled = D(sale.credit_settled).minus(a.amount);
+        if (settled.lt(0)) throw invalid("ALLOCATION_MISMATCH", `${sale.number}: allocation no longer matches the sale`);
+        await tx.sale.update({ where: { id: sale.id }, data: { credit_settled: settled } });
+      }
+      await this.posting.reverse(tx, journal.id, { date: businessDate(new Date(), b.timezone), reason: `Void ${journal.source_number ?? "payment"}: ${reason.trim()}`, userId: auth.userId, currencyDecimals: b.currency_decimals });
+      await tx.payment.update({ where: { id: p.id }, data: { status: "CANCELLED", voided_at: new Date(), voided_by_id: auth.userId, void_reason: reason.trim() } });
+      await this.audit.record(auth, { action: "customer.payment_voided", entityType: "customer", entityId: p.customer_id!, summary: `${journal.source_number ?? p.id} (${p.amount}) voided: ${reason.trim()}`, branchId: p.branch_id }, tx);
+      return { id: p.id, voided: true };
+    });
+  }
+
+  /** Account payments received from a customer (for the customer screen). */
+  async payments(auth: AuthContext, customerId: string) {
+    const rows = await this.prisma.client.payment.findMany({ where: { business_id: auth.businessId, customer_id: customerId, sale_id: null }, orderBy: { created_at: "desc" }, take: 200 });
+    const journals = await this.prisma.client.journalEntry.findMany({ where: { source_type: "customer_payment", source_id: { in: rows.map((r) => r.id) }, reversal_of_id: null }, select: { source_id: true, source_number: true } });
+    return rows.map((r) => ({ ...r, number: journals.find((j) => j.source_id === r.id)?.source_number ?? null }));
+  }
+
+  /** Deletes a customer that has never been used in a sale, payment or held cart. */
+  async remove(auth: AuthContext, id: string) {
+    const c = await this.prisma.client.customer.findFirst({ where: { id, business_id: auth.businessId } });
+    if (!c) throw notFound("Customer");
+    const [sales, payments, held, journal] = await Promise.all([
+      this.prisma.client.sale.count({ where: { customer_id: id } }), this.prisma.client.payment.count({ where: { customer_id: id } }),
+      this.prisma.client.heldCart.count({ where: { customer_id: id } }), this.prisma.client.journalLine.count({ where: { customer_id: id } }),
+    ]);
+    if (sales + payments + held + journal > 0) throw invalid("CUSTOMER_IN_USE", `${c.name} has sales or payments on record and cannot be deleted — mark the customer inactive instead`);
+    await this.prisma.client.customer.delete({ where: { id } });
+    await this.audit.record(auth, { action: "customer.deleted", entityType: "customer", entityId: id, summary: `Customer "${c.name}" deleted` });
+    return { id, deleted: true };
   }
 
   /** Statement from the receivable/deposit control accounts (running balance). */

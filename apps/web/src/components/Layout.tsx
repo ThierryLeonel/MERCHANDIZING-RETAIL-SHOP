@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, Boxes, CheckSquare, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Truck, Users, Wallet } from "lucide-react";
+import { BarChart3, BookOpen, Boxes, Receipt, CheckSquare, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Truck, Upload, Users, Wallet } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import type { PermissionCode } from "@retail/api-contracts";
@@ -10,6 +10,7 @@ import { cx, Select } from "./ui";
 export const NAV: { to: string; label: MessageKey; icon: typeof LayoutDashboard; any: PermissionCode[] }[] = [
   { to: "/", label: "nav.dashboard", icon: LayoutDashboard, any: ["dashboard.view"] },
   { to: "/pos", label: "nav.pos", icon: ShoppingCart, any: ["pos.sell"] },
+  { to: "/sales", label: "nav.sales", icon: Receipt, any: ["reports.view", "transactions.void", "sessions.view_all"] },
   { to: "/products", label: "nav.products", icon: Package, any: ["products.view"] },
   { to: "/inventory", label: "nav.inventory", icon: Boxes, any: ["inventory.view"] },
   { to: "/purchasing", label: "nav.purchasing", icon: Truck, any: ["purchasing.view", "suppliers.view"] },
@@ -18,6 +19,7 @@ export const NAV: { to: string; label: MessageKey; icon: typeof LayoutDashboard;
   { to: "/accounting", label: "nav.accounting", icon: BookOpen, any: ["accounting.view", "reports.financial"] },
   { to: "/reports", label: "nav.reports", icon: BarChart3, any: ["reports.view"] },
   { to: "/approvals", label: "nav.approvals", icon: CheckSquare, any: ["approvals.view"] },
+  { to: "/import", label: "nav.import", icon: Upload, any: ["data.import"] },
   { to: "/admin", label: "nav.admin", icon: Settings, any: ["admin.users", "admin.settings", "admin.audit"] },
 ];
 

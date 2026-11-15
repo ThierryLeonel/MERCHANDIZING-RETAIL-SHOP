@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Query, Req } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
 import { randomUUID } from "node:crypto";
 import { Auth, AuthContext, Public, RequirePermissions } from "../../common/auth-context";
 import { DomainError, notFound } from "../../common/errors";
@@ -69,6 +69,14 @@ class ReturnDto {
 }
 class ConfirmDto { @IsString() @MinLength(3) reference: string }
 class ReasonDto { @IsString() @MinLength(3) reason: string }
+class VoidSaleDto {
+  @IsString() @MinLength(3) reason: string;
+  @IsIn(["CASH", "MOBILE_MONEY", "CARD", "BANK_TRANSFER", "CUSTOMER_CREDIT"]) refund_method: any;
+  @IsOptional() @IsUUID() financial_account_id?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsUUID() register_id?: string;
+  @IsOptional() @IsBoolean() restock?: boolean;
+}
 class HoldDto {
   @IsUUID() branch_id: string;
   @IsOptional() @IsUUID() register_id?: string;
@@ -124,6 +132,10 @@ export class SalesController {
 
   @Post("sales/:id/cancel") @HttpCode(200) @RequirePermissions("pos.sell")
   cancel(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: ReasonDto) { return this.svc.cancelPending(a, id, dto.reason); }
+
+  /** Administrator void: full reversal (stock back, refund) — the sale stays on record, marked voided. */
+  @Post("sales/:id/void") @HttpCode(200) @RequirePermissions("transactions.void")
+  voidSale(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: VoidSaleDto) { return this.svc.voidSale(a, id, dto); }
 
   @Post("payments/:id/confirm") @HttpCode(200) @RequirePermissions("pos.confirm_payment")
   confirm(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: ConfirmDto) { return this.svc.confirmPayment(a, id, dto.reference); }

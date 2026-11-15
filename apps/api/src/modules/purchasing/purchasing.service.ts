@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
 import type { Prisma, Tx } from "@retail/db";
-import { AuthContext, assertBranch, branchFilter } from "../../common/auth-context";
+import { AuthContext, assertBranch, assertCan, branchFilter } from "../../common/auth-context";
 import { AuditService } from "../../common/audit.service";
 import { conflict, forbidden, invalid, notFound } from "../../common/errors";
 import { D, Dec, money, qty, sum, unitCost, ZERO } from "../../common/money";
@@ -478,6 +478,31 @@ export class PurchasingService implements OnModuleInit {
       await tx.supplierPayment.update({ where: { id: payment.id }, data: { unallocated, journal_entry_id: journal?.id } });
       await this.audit.record(auth, { action: "supplier_payment.posted", entityType: "supplier_payment", entityId: payment.id, summary: `${number} paid ${amount} (${unallocated} unallocated)`, branchId: input.branch_id }, tx);
       return tx.supplierPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { allocations: true } });
+    });
+  }
+
+  /** Voids a supplier payment: invoice allocations are undone and the journal reversed. */
+  async voidSupplierPayment(auth: AuthContext, id: string, reason: string) {
+    assertCan(auth, "transactions.void", "Voiding payments requires transactions.void");
+    if (!reason?.trim()) throw invalid("REASON_REQUIRED", "Enter the reason for voiding this payment");
+    const b = await this.settings.business(auth.businessId);
+    return this.prisma.tx(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM supplier_payments WHERE id = ${id}::uuid FOR UPDATE`;
+      const p = await tx.supplierPayment.findFirst({ where: { id, business_id: auth.businessId }, include: { allocations: true } });
+      if (!p) throw notFound("Supplier payment");
+      assertBranch(auth, p.branch_id);
+      if (p.status !== "POSTED") throw invalid("ALREADY_VOIDED", `${p.number} is already voided`);
+      for (const a of p.allocations) {
+        await tx.$queryRaw`SELECT id FROM supplier_invoices WHERE id = ${a.supplier_invoice_id}::uuid FOR UPDATE`;
+        const inv = await tx.supplierInvoice.findUniqueOrThrow({ where: { id: a.supplier_invoice_id } });
+        const paid = D(inv.amount_paid).minus(a.amount);
+        if (paid.lt(0)) throw invalid("ALLOCATION_MISMATCH", `${inv.number}: allocation no longer matches the invoice`);
+        await tx.supplierInvoice.update({ where: { id: inv.id }, data: { amount_paid: paid } });
+      }
+      if (p.journal_entry_id) await this.posting.reverse(tx, p.journal_entry_id, { date: businessDate(new Date(), b.timezone), reason: `Void ${p.number}: ${reason.trim()}`, userId: auth.userId, currencyDecimals: b.currency_decimals });
+      await tx.supplierPayment.update({ where: { id }, data: { status: "REVERSED", voided_at: new Date(), voided_by_id: auth.userId, void_reason: reason.trim() } });
+      await this.audit.record(auth, { action: "supplier_payment.voided", entityType: "supplier_payment", entityId: id, summary: `${p.number} voided: ${reason.trim()}`, branchId: p.branch_id }, tx);
+      return tx.supplierPayment.findUniqueOrThrow({ where: { id }, include: { allocations: true } });
     });
   }
 }

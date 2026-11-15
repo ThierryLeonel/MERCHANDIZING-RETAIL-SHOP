@@ -113,6 +113,45 @@ export class CatalogueService {
     return variant;
   }
 
+  /**
+   * Deletes a product that has never been bought, sold, counted or moved.
+   * Products with history must be discontinued instead (reports and the
+   * ledger keep referring to them).
+   */
+  async deleteProduct(auth: AuthContext, id: string) {
+    const p = await this.prisma.client.product.findFirst({ where: { id, business_id: auth.businessId }, include: { variants: { select: { id: true } } } });
+    if (!p) throw notFound("Product");
+    const ids = p.variants.map((v) => v.id);
+    const inUse = () => invalid("PRODUCT_IN_USE", `${p.name} has stock movements or transactions and cannot be deleted — set it to Discontinued instead`);
+    const db = this.prisma.client;
+    const counts = await Promise.all([
+      db.stockMovement.count({ where: { variant_id: { in: ids } } }), db.saleLine.count({ where: { variant_id: { in: ids } } }),
+      db.purchaseOrderLine.count({ where: { variant_id: { in: ids } } }), db.stockBalance.count({ where: { variant_id: { in: ids }, OR: [{ qty_on_hand: { not: 0 } }, { qty_reserved: { not: 0 } }] } }),
+    ]);
+    if (counts.some((c) => c > 0)) throw inUse();
+    try {
+      await this.prisma.tx(async (t) => {
+        const where = { variant_id: { in: ids } };
+        await t.barcode.deleteMany({ where });
+        await t.variantUnitConversion.deleteMany({ where });
+        await t.variantAttributeValue.deleteMany({ where });
+        await t.priceListItem.deleteMany({ where });
+        await t.stockBalance.deleteMany({ where });
+        await t.inventoryCostPool.deleteMany({ where: { ...where, quantity: 0, value: 0 } });
+        await t.bundleComponent.deleteMany({ where: { bundle_variant_id: { in: ids } } });
+        await t.batch.deleteMany({ where });
+        await t.productVariant.deleteMany({ where: { product_id: id } });
+        await t.product.delete({ where: { id } });
+        await this.audit.record(auth, { action: "product.deleted", entityType: "product", entityId: id, summary: `Product ${p.code} "${p.name}" deleted` }, t);
+      });
+    } catch (e: any) {
+      // Any remaining reference (count line, transfer, promotion, bundle…) means the product has history.
+      if (e?.code === "P2003" || /foreign key/i.test(String(e?.message))) throw inUse();
+      throw e;
+    }
+    return { id, deleted: true };
+  }
+
   /** A category and all its sub-categories (any depth). */
   async categoryTree(businessId: string, categoryId: string): Promise<string[]> {
     const all = await this.prisma.client.category.findMany({ where: { business_id: businessId }, select: { id: true, parent_id: true } });
