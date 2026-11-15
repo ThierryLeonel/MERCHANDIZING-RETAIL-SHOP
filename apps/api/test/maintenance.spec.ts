@@ -54,6 +54,42 @@ describe("chart of accounts and financial accounts", () => {
   });
 });
 
+describe("audit log retention", () => {
+  it("deletes only this business's entries older than the chosen period (6 months minimum), and records the purge", async () => {
+    const ago = (days: number) => new Date(Date.now() - days * 86_400_000);
+    const mk = (days: number, summary: string) => w.db.auditEvent.create({ data: { business_id: w.B, action: "test.old", entity_type: "test", summary, created_at: ago(days) } });
+    const veryOld = await mk(400, "13 months old");
+    const old = await mk(200, "7 months old");
+    const recent = await mk(100, "3 months old");
+
+    // the database itself refuses: without the purge flag, and for recent entries even with it
+    await expect(w.db.$executeRawUnsafe(`DELETE FROM audit_events WHERE id = '${veryOld.id}'`)).rejects.toThrow(/append-only/);
+    await expect(w.db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SELECT set_config('app.audit_purge', 'on', true)`);
+      await tx.$executeRawUnsafe(`DELETE FROM audit_events WHERE id = '${recent.id}'`);
+    })).rejects.toThrow(/append-only/);
+    await expect(w.db.$executeRawUnsafe(`UPDATE audit_events SET summary = 'x' WHERE id = '${veryOld.id}'`)).rejects.toThrow(/append-only/);
+
+    await expect(w.svc.maintenance.purgeAudit(w.owner, { months: 3, password: PASSWORD })).rejects.toMatchObject({ code: "RETENTION_TOO_SHORT" });
+    await expect(w.svc.maintenance.purgeAudit(w.manager, { months: 6, password: PASSWORD })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(w.svc.maintenance.purgeAudit(w.owner, { months: 6, password: "wrong" })).rejects.toMatchObject({ code: "WRONG_PASSWORD" });
+
+    const preview12 = await w.svc.maintenance.auditPurgePreview(w.owner, 12);
+    expect(preview12.count).toBe(1);
+    expect((await w.svc.maintenance.auditPurgeRows(w.owner, 12)).map((r) => r.summary)).toEqual(["13 months old"]);
+    const preview6 = await w.svc.maintenance.auditPurgePreview(w.owner, 6);
+    expect(preview6.count).toBe(2);
+
+    const res = await w.svc.maintenance.purgeAudit(w.owner, { months: 6, password: PASSWORD });
+    expect(res.deleted).toBe(2);
+    expect(await w.db.auditEvent.findUnique({ where: { id: veryOld.id } })).toBeNull();
+    expect(await w.db.auditEvent.findUnique({ where: { id: old.id } })).toBeNull();
+    expect(await w.db.auditEvent.findUnique({ where: { id: recent.id } })).not.toBeNull();
+    const record = await w.db.auditEvent.findFirstOrThrow({ where: { business_id: w.B, action: "audit.purged" }, orderBy: { created_at: "desc" } });
+    expect(record.summary).toMatch(/^2 audit entries older than 6 months/);
+  });
+});
+
 describe("backup and clear", () => {
   const restoreUrl = (process.env.TEST_DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/retail_test").replace(/\/([^/?]+)(\?|$)/, "/retail_test_restore$2");
   it("backs up everything and restores it into a fresh database (reversals, voids, closed periods), then clears it", async () => {

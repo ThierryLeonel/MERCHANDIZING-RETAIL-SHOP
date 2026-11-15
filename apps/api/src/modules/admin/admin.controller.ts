@@ -3,7 +3,8 @@ import type { Response } from "express";
 import { MaintenanceService } from "./maintenance.service";
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { ArrayUnique, IsArray, IsBoolean, IsEmail, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { ArrayUnique, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from "class-validator";
+import { toCsv } from "../reports/reports.service";
 import { PERMISSIONS } from "@retail/api-contracts";
 import { Auth, AuthContext, assertCan, RequirePermissions } from "../../common/auth-context";
 import { AuditService } from "../../common/audit.service";
@@ -46,6 +47,10 @@ class PolicyDto { @IsOptional() @IsBoolean() enabled?: boolean; @IsOptional() @I
 
 @ApiTags("admin")
 @ApiBearerAuth()
+class AuditPurgeDto {
+  @IsInt() @Min(6) months: number;
+  @IsString() password: string;
+}
 class ClearDto {
   @IsIn(["transactions", "everything"]) mode: "transactions" | "everything";
   @IsString() confirm_name: string;
@@ -74,6 +79,21 @@ export class AdminController {
       throw e;
     }
   }
+
+  @Get("audit-retention") @RequirePermissions("admin.audit_purge")
+  auditPreview(@Auth() a: AuthContext, @Query("months") months?: string) { return this.maintenance.auditPurgePreview(a, Number(months ?? 6)); }
+
+  /** CSV of the entries a purge would delete — download it before purging if you need to keep them. */
+  @Get("audit-retention/export") @RequirePermissions("admin.audit_purge")
+  async auditExport(@Auth() a: AuthContext, @Res() res: Response, @Query("months") months?: string) {
+    const rows = await this.maintenance.auditPurgeRows(a, Number(months ?? 6));
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="audit-log-before-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(toCsv(rows));
+  }
+
+  @Post("audit-retention/purge") @HttpCode(200) @RequirePermissions("admin.audit_purge")
+  purgeAudit(@Auth() a: AuthContext, @Body() dto: AuditPurgeDto) { return this.maintenance.purgeAudit(a, dto); }
 
   @Post("clear") @HttpCode(200) @RequirePermissions("admin.reset")
   clear(@Auth() a: AuthContext, @Body() dto: ClearDto) { return this.maintenance.clear(a, dto); }

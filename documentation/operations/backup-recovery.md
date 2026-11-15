@@ -24,6 +24,9 @@ Users holding `admin.reset` (Owner by default) can clear the application after t
 - **Everything** — the above plus products, variants, barcodes, price lists, categories, brands, departments, customers, customer groups and suppliers.
 The tables are emptied with `TRUNCATE` in a single statement (the append-only triggers stay in force for normal operation), and an `application.cleared` audit event is recorded. It is refused when the database holds more than one business. **Download a backup first: clearing cannot be undone.**
 
+## Audit log retention (Administration → Audit log)
+The audit log is append-only: entries can never be edited. Users holding `admin.audit_purge` (Owner by default) can delete this business's entries **older than 6, 12, 24 or 36 months** after re-entering their password; a CSV of exactly those entries can be downloaded first. The database enforces the rule independently (trigger `fn_audit_events_retention`): a DELETE is accepted only inside the purge action (transaction-local flag `app.audit_purge`) and only for entries created more than 6 months ago — anything newer is refused even with direct database access through the application role. Each purge writes an `audit.purged` entry with the cut-off date and the number deleted. Check your legal record-keeping obligations before deleting audit history.
+
 ## Database backups
 Daily logical backup (keep at least 30 daily + 12 monthly copies, encrypted, off-site):
 ```bash

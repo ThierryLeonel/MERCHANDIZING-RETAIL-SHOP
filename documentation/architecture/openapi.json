@@ -4263,6 +4263,76 @@
         ]
       }
     },
+    "/api/v1/admin/audit-retention": {
+      "get": {
+        "operationId": "AdminController_auditPreview",
+        "parameters": [
+          {
+            "name": "months",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-retention/export": {
+      "get": {
+        "operationId": "AdminController_auditExport",
+        "parameters": [
+          {
+            "name": "months",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-retention/purge": {
+      "post": {
+        "operationId": "AdminController_purgeAudit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditPurgeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/clear": {
       "post": {
         "operationId": "AdminController_clear",
@@ -5337,6 +5407,10 @@
         "properties": {}
       },
       "ManualJournalDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AuditPurgeDto": {
         "type": "object",
         "properties": {}
       },

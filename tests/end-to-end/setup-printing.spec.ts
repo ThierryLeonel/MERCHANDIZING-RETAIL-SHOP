@@ -89,6 +89,16 @@ test.describe.serial("accounts setup, samples and printing", () => {
     expect(p.html).toMatch(/Receipt\s*S-/);
   });
 
+  test("owner sees the audit retention panel; nothing in the demo data is old enough to delete", async ({ browser }) => {
+    const page = await as(browser, "owner@mboa.demo");
+    await page.goto("/admin");
+    await page.getByRole("tab", { name: "Audit log" }).click();
+    await expect(page.getByText("Clear old audit entries")).toBeVisible();
+    await expect(page.getByText(/^0\s*entries before/)).toBeVisible();
+    await page.getByLabel("Your password").fill("Demo@12345");
+    await expect(page.getByRole("button", { name: /Delete .*old entries/ })).toBeDisabled();
+  });
+
   test("owner downloads a backup", async ({ browser }) => {
     const page = await as(browser, "owner@mboa.demo");
     await page.goto("/admin");

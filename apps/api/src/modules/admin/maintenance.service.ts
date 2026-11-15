@@ -145,6 +145,54 @@ export class MaintenanceService {
     await this.audit.record(auth, { action: "backup.downloaded", entityType: "business", entityId: auth.businessId, summary: "Full backup downloaded" });
   }
 
+  // --------------------------------------------------------- audit retention
+  /** Audit entries can only be purged once they are at least this many months old (also enforced by the database). */
+  static readonly AUDIT_MIN_MONTHS = 6;
+
+  private auditCutoff(months: number) {
+    if (!Number.isInteger(months) || months < MaintenanceService.AUDIT_MIN_MONTHS) throw invalid("RETENTION_TOO_SHORT", `Audit entries must be kept for at least ${MaintenanceService.AUDIT_MIN_MONTHS} months`);
+    const d = new Date();
+    d.setUTCMonth(d.getUTCMonth() - months);
+    return d;
+  }
+
+  /** How many entries a purge would delete. */
+  async auditPurgePreview(auth: AuthContext, months: number) {
+    assertCan(auth, "admin.audit_purge");
+    const cutoff = this.auditCutoff(months);
+    const where = { business_id: auth.businessId, created_at: { lt: cutoff } };
+    const [count, oldest] = await Promise.all([this.prisma.client.auditEvent.count({ where }), this.prisma.client.auditEvent.findFirst({ where, orderBy: { created_at: "asc" }, select: { created_at: true } })]);
+    return { months, cutoff: cutoff.toISOString(), count, oldest: oldest?.created_at ?? null };
+  }
+
+  /** The entries a purge would delete, as rows for a CSV download (kept by the business before purging). */
+  async auditPurgeRows(auth: AuthContext, months: number) {
+    assertCan(auth, "admin.audit_purge");
+    const cutoff = this.auditCutoff(months);
+    const rows = await this.prisma.client.auditEvent.findMany({ where: { business_id: auth.businessId, created_at: { lt: cutoff } }, orderBy: { created_at: "asc" } });
+    const users = await this.prisma.client.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.actor_id).filter(Boolean) as string[])] } }, select: { id: true, full_name: true } });
+    return rows.map((r) => ({ when: r.created_at.toISOString(), user: users.find((u) => u.id === r.actor_id)?.full_name ?? "", action: r.action, entity: r.entity_type, entity_id: r.entity_id ?? "", summary: r.summary, ip: r.ip_address ?? "", data: JSON.stringify(r.data) }));
+  }
+
+  /**
+   * Deletes this business's audit entries older than `months` (at least 6).
+   * The database trigger independently refuses to delete anything newer than
+   * 6 months. The purge itself is recorded as a new audit entry.
+   */
+  async purgeAudit(auth: AuthContext, input: { months: number; password: string }) {
+    assertCan(auth, "admin.audit_purge");
+    await this.confirmOwner(auth, input.password);
+    const cutoff = this.auditCutoff(input.months);
+    const deleted = await this.prisma.tx(async (tx) => {
+      await tx.$executeRawUnsafe(`SELECT set_config('app.audit_purge', 'on', true)`);
+      const n = await tx.$executeRaw`DELETE FROM audit_events WHERE business_id = ${auth.businessId}::uuid AND created_at < ${cutoff}`;
+      await tx.$executeRawUnsafe(`SELECT set_config('app.audit_purge', 'off', true)`);
+      await this.audit.record(auth, { action: "audit.purged", entityType: "business", entityId: auth.businessId, summary: `${n} audit entries older than ${input.months} months (before ${cutoff.toISOString().slice(0, 10)}) deleted`, data: { months: input.months, cutoff: cutoff.toISOString(), deleted: n } }, tx);
+      return n;
+    }, { timeout: 120_000 });
+    return { deleted, cutoff: cutoff.toISOString() };
+  }
+
   // ------------------------------------------------------------------- clear
   /**
    * Clears the application for a fresh start.

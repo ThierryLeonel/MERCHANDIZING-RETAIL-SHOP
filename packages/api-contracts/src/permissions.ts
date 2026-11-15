@@ -62,6 +62,7 @@ export const PERMISSIONS = [
   { code: "transactions.void", module: "admin", description: "Void sales, expenses and payments (posts reversing entries; records are kept)", sensitive: true },
   { code: "data.import", module: "admin", description: "Import products, opening stock and customers from spreadsheets", sensitive: true },
   { code: "admin.backup", module: "admin", description: "Download a full backup of the application data", sensitive: true },
+  { code: "admin.audit_purge", module: "admin", description: "Delete audit log entries older than 6 months", sensitive: true },
   { code: "admin.reset", module: "admin", description: "Clear the application (delete transactions or all business data)", sensitive: true },
 ] as const satisfies readonly PermissionDef[];
 

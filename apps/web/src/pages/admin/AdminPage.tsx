@@ -2,7 +2,7 @@ import { Download, Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, Textarea, useToast } from "../../components/ui";
 import { api, downloadFile } from "../../lib/api";
-import { dateTime, humanize, money } from "../../lib/format";
+import { date, dateTime, humanize, money } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
 
@@ -219,12 +219,50 @@ function Policies() {
 }
 
 function Audit() {
+  const { can } = useSession();
   const [search, setSearch] = useState("");
   const q = useApi<any[]>(`/reports/audit?from=2000-01-01&to=2100-01-01&search=${encodeURIComponent(search)}`, [search]);
   return (
+    <div className="space-y-4">
+    {can("admin.audit_purge") && <AuditRetention onDone={() => q.refetch()} />}
     <Card padded={false} title="Audit log (latest 200)">
       <div className="border-b border-slate-200 p-3"><SearchInput value={search} onChange={setSearch} placeholder="Search action or summary" /></div>
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} columns={[{ key: "created_at", header: "When", render: (a) => dateTime(a.created_at) }, { key: "actor_name", header: "User" }, { key: "action", header: "Action", render: (a) => <code className="text-xs">{a.action}</code> }, { key: "summary", header: "Summary" }, { key: "ip_address", header: "IP" }]} />
+    </Card>
+    </div>
+  );
+}
+
+/** Delete audit entries older than 6 months or more (the database refuses anything newer). */
+function AuditRetention({ onDone }: { onDone: () => void }) {
+  const toast = useToast();
+  const [months, setMonths] = useState(6);
+  const preview = useApi<{ count: number; cutoff: string; oldest: string | null }>(`/admin/audit-retention?months=${months}`, [months]);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  const count = preview.data?.count ?? 0;
+  const purge = async () => {
+    if (!window.confirm(`Permanently delete ${count} audit entries older than ${months} months? This cannot be undone.`)) return;
+    setBusy("purge"); setErr(null);
+    try {
+      const r = await api<{ deleted: number }>("/admin/audit-retention/purge", { body: { months, password } });
+      toast(`${r.deleted} old audit entries deleted`); setPassword(""); preview.refetch(); onDone();
+    } catch (e) { setErr(e); } finally { setBusy(null); }
+  };
+  return (
+    <Card title="Clear old audit entries">
+      <p className="text-sm text-slate-600">Audit entries can never be edited, and only entries <b>older than 6 months</b> can be deleted — the database itself refuses anything newer. The deletion is itself recorded in the audit log. Download the entries first if you may need them later (tax inspection, disputes).</p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <Field label="Delete entries older than">{(id) => <Select id={id} value={months} onChange={(e) => setMonths(Number(e.target.value))}>{[6, 12, 24, 36].map((m) => <option key={m} value={m}>{m} months</option>)}</Select>}</Field>
+        <div className="pb-2 text-sm">{preview.isLoading ? "Counting…" : <><b>{count}</b> entr{count === 1 ? "y" : "ies"} before {preview.data ? date(preview.data.cutoff) : "…"}{preview.data?.oldest && <> (oldest {date(preview.data.oldest)})</>}</>}</div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <Button variant="secondary" icon={<Download className="h-4 w-4" />} disabled={!count} loading={busy === "csv"} onClick={async () => { setBusy("csv"); setErr(null); try { await downloadFile(`/admin/audit-retention/export?months=${months}`, "audit-log.csv"); } catch (e) { setErr(e); } finally { setBusy(null); } }}>Download these entries (CSV)</Button>
+        <Field label="Your password">{(id) => <Input id={id} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />}</Field>
+        <Button variant="danger" disabled={!count || !password} loading={busy === "purge"} onClick={purge}>Delete {count || ""} old entries</Button>
+      </div>
+      <ErrorText error={err} />
     </Card>
   );
 }
