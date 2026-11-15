@@ -1,13 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsDateString, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
 import { Auth, AuthContext, RequirePermissions } from "../../common/auth-context";
 import { Idempotent } from "../../common/idempotency";
 import { PageQuery } from "../../common/pagination";
 import { PrismaService } from "../../common/prisma.service";
 import { IsDecimalValue } from "../../common/validators";
 import { FinanceService } from "./finance.service";
+import { ChartService } from "../accounting/chart.service";
 
 class OpenDto { @IsUUID() register_id: string; @IsDecimalValue({ min: 0 }) opening_float: string; @IsOptional() @IsUUID() float_source_account_id?: string }
 class MovementDto {
@@ -40,11 +41,25 @@ class SessionQuery extends PageQuery { @IsOptional() @IsString() status?: string
 
 @ApiTags("finance")
 @ApiBearerAuth()
+class FinancialAccountDto {
+  @IsString() @MinLength(2) name: string;
+  @IsIn(["SAFE", "PETTY_CASH", "BANK", "MOBILE_MONEY", "CLEARING"]) kind: any;
+  @IsOptional() @IsString() code?: string;
+  @IsOptional() @IsUUID() branch_id?: string | null;
+  @IsOptional() @IsString() provider?: string | null;
+  @IsOptional() @IsUUID() gl_account_id?: string | null;
+}
+class UpdateFinancialAccountDto {
+  @IsOptional() @IsString() @MinLength(2) name?: string;
+  @IsOptional() @IsUUID() branch_id?: string | null;
+  @IsOptional() @IsString() provider?: string | null;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
 class VoidReasonDto { @IsString() @MinLength(3) reason: string }
 
 @Controller()
 export class FinanceController {
-  constructor(private svc: FinanceService, private prisma: PrismaService) {}
+  constructor(private svc: FinanceService, private chart: ChartService, private prisma: PrismaService) {}
 
   @Get("registers") @RequirePermissions("pos.sell")
   async registers(@Auth() a: AuthContext, @Query("branch_id") branchId?: string) {
@@ -73,6 +88,15 @@ export class FinanceController {
 
   @Get("financial-accounts") @RequirePermissions("finance.view")
   accounts(@Auth() a: AuthContext) { return this.svc.accountBalances(a); }
+
+  @Post("financial-accounts") @RequirePermissions("finance.manage")
+  createAccount(@Auth() a: AuthContext, @Body() dto: FinancialAccountDto) { return this.chart.createFinancialAccount(a, dto); }
+
+  @Patch("financial-accounts/:id") @RequirePermissions("finance.manage")
+  updateAccount(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateFinancialAccountDto) { return this.chart.updateFinancialAccount(a, id, dto); }
+
+  @Delete("financial-accounts/:id") @RequirePermissions("finance.manage")
+  deleteAccount(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.chart.deleteFinancialAccount(a, id); }
 
   @Get("financial-accounts/options") @RequirePermissions("pos.sell")
   async accountOptions(@Auth() a: AuthContext) {

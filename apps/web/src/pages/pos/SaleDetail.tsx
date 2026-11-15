@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge, Button, Card, DataTable, ErrorState, ErrorText, Field, Input, Modal, Money, PageHeader, Select, Spinner, Status, Textarea, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
+import { printReceipt } from "../../components/print";
 import { dateTime, humanize, money, qty } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
@@ -25,7 +26,7 @@ export default function SaleDetail() {
           <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setVoiding("void")}>Void sale</Button>
         </>}
         {s.journal_entry_id && can("accounting.view") && <Link to={`/accounting/journals/${s.journal_entry_id}`}><Button variant="secondary">View journal</Button></Link>}
-        <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Reprint receipt</Button>
+        <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => printReceipt()}>Reprint receipt</Button>
       </>} />
       {s.voided_at && (
         <div role="status" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">

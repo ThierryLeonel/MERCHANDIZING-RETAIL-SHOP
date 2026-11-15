@@ -37,6 +37,12 @@ export class DataController {
   @Post("stock") @HttpCode(200) @RequirePermissions("data.import", "inventory.opening")
   stock(@Auth() a: AuthContext, @Body() dto: StockImportDto) { return this.svc.stock(a, dto); }
 
+  @Get("suppliers/export") @RequirePermissions("suppliers.view")
+  exportSuppliers(@Auth() a: AuthContext) { return this.svc.exportSuppliers(a); }
+
+  @Post("suppliers") @HttpCode(200) @RequirePermissions("data.import", "suppliers.manage")
+  suppliers(@Auth() a: AuthContext, @Body() dto: ImportDto) { return this.svc.suppliers(a, dto); }
+
   @Post("customers") @HttpCode(200) @RequirePermissions("data.import", "customers.manage")
   customers(@Auth() a: AuthContext, @Body() dto: ImportDto) { return this.svc.customers(a, dto); }
 }

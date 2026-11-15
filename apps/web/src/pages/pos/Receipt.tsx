@@ -15,6 +15,7 @@ export function Receipt({ sale }: { sale: any }) {
         {b?.tax_id && <div>Tax ID: {b.tax_id}</div>}
       </div>
       <div className="my-2 border-t border-dashed border-black" />
+      {sale.voided_at && <div className="mb-1 border border-black py-0.5 text-center font-bold">*** VOIDED — NOT VALID ***</div>}
       <div className="flex justify-between"><span>Receipt</span><span>{sale.number}</span></div>
       <div className="flex justify-between"><span>Date</span><span>{dateTime(sale.completed_at ?? sale.created_at)}</span></div>
       <div className="flex justify-between"><span>Cashier</span><span>{sale.cashier_name}</span></div>

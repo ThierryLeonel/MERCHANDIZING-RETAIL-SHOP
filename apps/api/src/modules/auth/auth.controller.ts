@@ -42,7 +42,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle({ default: { limit: Number(process.env.REFRESH_RATE_LIMIT_PER_MINUTE ?? 120), ttl: 60_000 } })
   @Post("refresh")
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {

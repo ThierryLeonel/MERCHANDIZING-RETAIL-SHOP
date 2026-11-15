@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorState, ErrorText, Field, Input, Kpi, Modal, PageHeader, Select, Spinner, Status, Tabs, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
+import { PrintButton, PrintSheet } from "../../components/print";
 import { date, dateTime, money } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
@@ -54,11 +55,12 @@ export default function CustomerDetail() {
         { key: "completed_at", header: "Date", render: (s: any) => dateTime(s.completed_at) }, { key: "due_date", header: "Due", render: (s: any) => date(s.due_date) },
         { key: "credit_amount", header: "On account", align: "right", render: (s: any) => money(s.credit_amount) }, { key: "outstanding", header: "Outstanding", align: "right", render: (s: any) => <strong>{money(s.outstanding)}</strong> },
       ]} /></Card>}
-      {tab === "statement" && <Card padded={false}><DataTable rows={statement.data?.lines.map((l: any, i: number) => ({ ...l, id: i }))} loading={statement.isLoading} columns={[
+      {tab === "statement" && <div className="flex justify-end"><PrintButton target="statement-sheet" label="Print statement" size="sm" /></div>}
+      {tab === "statement" && <PrintSheet id="statement-sheet" title={`Statement of account — ${c.name}`} subtitle={<>{c.code}{c.phone ? ` · ${c.phone}` : ""} · Receivable {money(c.receivable)} · Store credit {money(c.deposits)}</>}><Card padded={false}><DataTable rows={statement.data?.lines.map((l: any, i: number) => ({ ...l, id: i }))} loading={statement.isLoading} columns={[
         { key: "date", header: "Date", render: (l: any) => date(l.date) }, { key: "source_number", header: "Document" }, { key: "description", header: "Description" }, { key: "account", header: "Account" },
         { key: "debit", header: "Debit", align: "right", render: (l: any) => (Number(l.debit) ? money(l.debit) : "") }, { key: "credit", header: "Credit", align: "right", render: (l: any) => (Number(l.credit) ? money(l.credit) : "") },
         { key: "balance", header: "Balance", align: "right", render: (l: any) => money(l.balance) },
-      ]} /></Card>}
+      ]} /></Card></PrintSheet>}
       {tab === "sales" && <Card padded={false}><DataTable rows={c.recent_sales} columns={[{ key: "number", header: "Sale", render: (s: any) => <Link className="text-brand-700 hover:underline" to={`/sales/${s.id}`}>{s.number}</Link> }, { key: "completed_at", header: "Date", render: (s: any) => dateTime(s.completed_at) }, { key: "total", header: "Total", align: "right", render: (s: any) => money(s.total) }]} /></Card>}
       {editing && <CustomerForm customer={c} onClose={() => setEditing(false)} onDone={() => { setEditing(false); refetch(); }} />}
       {paying && <PaymentForm customer={c} branchId={branchId!} onClose={() => setPaying(false)} onDone={() => { setPaying(false); refetch(); toast("Payment recorded"); }} />}

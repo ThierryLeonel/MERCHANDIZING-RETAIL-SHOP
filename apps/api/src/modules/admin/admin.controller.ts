@@ -1,4 +1,7 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from "@nestjs/common";
+import { createGzip } from "node:zlib";
+import type { Response } from "express";
+import { MaintenanceService } from "./maintenance.service";
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ArrayUnique, IsArray, IsBoolean, IsEmail, IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 import { PERMISSIONS } from "@retail/api-contracts";
@@ -43,9 +46,37 @@ class PolicyDto { @IsOptional() @IsBoolean() enabled?: boolean; @IsOptional() @I
 
 @ApiTags("admin")
 @ApiBearerAuth()
+class ClearDto {
+  @IsIn(["transactions", "everything"]) mode: "transactions" | "everything";
+  @IsString() confirm_name: string;
+  @IsString() password: string;
+}
+
 @Controller("admin")
 export class AdminController {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private maintenance: MaintenanceService) {}
+
+  /** Full backup (SQL script) streamed as a gzip download. */
+  @Get("backup") @RequirePermissions("admin.backup")
+  async backup(@Auth() a: AuthContext, @Res() res: Response) {
+    const b = await this.prisma.client.business.findUniqueOrThrow({ where: { id: a.businessId }, select: { name: true } });
+    const slug = b.name.normalize("NFD").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "retail";
+    res.setHeader("Content-Type", "application/gzip");
+    res.setHeader("Content-Disposition", `attachment; filename="${slug}-backup-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.sql.gz"`);
+    res.setHeader("Cache-Control", "no-store");
+    const gz = createGzip();
+    gz.pipe(res);
+    try {
+      for await (const chunk of this.maintenance.backup(a)) if (!gz.write(chunk)) await new Promise((r) => gz.once("drain", r));
+      gz.end();
+    } catch (e) {
+      gz.end(`\n-- BACKUP FAILED: ${(e as Error).message}\nROLLBACK;\n`);
+      throw e;
+    }
+  }
+
+  @Post("clear") @HttpCode(200) @RequirePermissions("admin.reset")
+  clear(@Auth() a: AuthContext, @Body() dto: ClearDto) { return this.maintenance.clear(a, dto); }
 
   @Get("settings") @RequirePermissions("admin.settings")
   async settings(@Auth() a: AuthContext) {

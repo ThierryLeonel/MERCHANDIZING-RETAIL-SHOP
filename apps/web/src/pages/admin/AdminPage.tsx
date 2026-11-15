@@ -1,7 +1,7 @@
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, Textarea, useToast } from "../../components/ui";
-import { api } from "../../lib/api";
+import { api, downloadFile } from "../../lib/api";
 import { dateTime, humanize, money } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
@@ -17,7 +17,9 @@ export default function AdminPage() {
         { key: "users", label: "Users", hidden: !can("admin.users") }, { key: "roles", label: "Roles & permissions", hidden: !can("admin.users") },
         { key: "taxes", label: "Tax rates", hidden: !can("admin.settings") }, { key: "policies", label: "Approval policies", hidden: !can("approvals.view") },
         { key: "audit", label: "Audit log", hidden: !can("admin.audit") },
+        { key: "data", label: "Backup & reset", hidden: !can("admin.backup") && !can("admin.reset") },
       ]} />
+      {tab === "data" && <BackupAndReset />}
       {tab === "settings" && <Settings />}
       {tab === "branches" && <Branches />}
       {tab === "users" && <Users />}
@@ -224,5 +226,63 @@ function Audit() {
       <div className="border-b border-slate-200 p-3"><SearchInput value={search} onChange={setSearch} placeholder="Search action or summary" /></div>
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} columns={[{ key: "created_at", header: "When", render: (a) => dateTime(a.created_at) }, { key: "actor_name", header: "User" }, { key: "action", header: "Action", render: (a) => <code className="text-xs">{a.action}</code> }, { key: "summary", header: "Summary" }, { key: "ip_address", header: "IP" }]} />
     </Card>
+  );
+}
+
+function BackupAndReset() {
+  const { can, me } = useSession();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  const [mode, setMode] = useState<"transactions" | "everything">("transactions");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [downloaded, setDownloaded] = useState(false);
+  const [doneMsg, setDoneMsg] = useState<string | null>(null);
+  const download = async () => {
+    setBusy("backup"); setErr(null);
+    try { await downloadFile("/admin/backup", "backup.sql.gz"); setDownloaded(true); toast("Backup downloaded — keep it somewhere safe"); } catch (e) { setErr(e); } finally { setBusy(null); }
+  };
+  const clear = async () => {
+    if (!window.confirm(mode === "everything" ? "Delete ALL transactions, products, categories, customers and suppliers? This cannot be undone." : "Delete ALL sales, purchases, stock, payments, expenses and journals? This cannot be undone.")) return;
+    setBusy("clear"); setErr(null);
+    try {
+      await api("/admin/clear", { body: { mode, confirm_name: name, password } });
+      setDoneMsg(mode === "everything" ? "The application was cleared: all transactions, products, customers and suppliers were deleted." : "All transactions were deleted. Products, customers, suppliers and settings were kept.");
+      setName(""); setPassword("");
+    } catch (e) { setErr(e); } finally { setBusy(null); }
+  };
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {can("admin.backup") && (
+        <Card title="Download a backup">
+          <p className="text-sm text-slate-600">A complete copy of the application data (products, stock, sales, purchases, customers, suppliers, accounts, users and settings) as a compressed SQL file.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+            <li>Keep it private: it contains customer details and password hashes.</li>
+            <li>To restore, a technician creates a new empty database, runs the app's migrations, then loads the file with <code className="rounded bg-slate-100 px-1">psql -f</code> (see documentation/operations/backup-recovery.md).</li>
+            <li>Download one regularly, and always before clearing the application.</li>
+          </ul>
+          <Button className="mt-3" icon={<Download className="h-4 w-4" />} loading={busy === "backup"} onClick={download}>Download backup</Button>
+        </Card>
+      )}
+      {can("admin.reset") && (
+        <Card title={<span className="text-red-700">Clear the application</span>}>
+          <p className="text-sm text-slate-600">Start again from a clean slate — for example after training or testing. Users, branches, registers, the chart of accounts, financial accounts, tax rates, units and settings are always kept, as is the audit log.</p>
+          <fieldset className="mt-3 space-y-2 text-sm">
+            <legend className="sr-only">What to clear</legend>
+            <label className="flex items-start gap-2"><input type="radio" name="clear-mode" checked={mode === "transactions"} onChange={() => setMode("transactions")} className="mt-1" /><span><b>Transactions only</b> — sales, returns, purchases, stock and stock movements, payments, expenses, cashier sessions, journals, approvals. Products, customers and suppliers stay (stock becomes zero).</span></label>
+            <label className="flex items-start gap-2"><input type="radio" name="clear-mode" checked={mode === "everything"} onChange={() => setMode("everything")} className="mt-1" /><span><b>Everything</b> — all of the above plus products, categories, brands, customers and suppliers.</span></label>
+          </fieldset>
+          {!downloaded && can("admin.backup") && <p role="note" className="mt-3 rounded-md bg-amber-50 p-2 text-sm text-amber-900">Download a backup first — clearing cannot be undone.</p>}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label={`Type the business name: ${me?.business.name ?? ""}`} className="sm:col-span-2">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />}</Field>
+            <Field label="Your password" className="sm:col-span-2">{(id) => <Input id={id} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />}</Field>
+          </div>
+          <Button className="mt-3" variant="danger" loading={busy === "clear"} disabled={name.trim() !== (me?.business.name ?? "").trim() || !password} onClick={clear}>{mode === "everything" ? "Clear everything" : "Clear all transactions"}</Button>
+          {doneMsg && <p role="status" className="mt-3 rounded-md bg-emerald-50 p-2 text-sm text-emerald-900">{doneMsg}</p>}
+        </Card>
+      )}
+      <div className="lg:col-span-2"><ErrorText error={err} /></div>
+    </div>
   );
 }

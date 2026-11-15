@@ -48,6 +48,8 @@ const ALIASES: Record<string, string[]> = {
   address: ["address", "adresse", "location", "quartier", "ville"],
   group: ["group", "customer_group", "groupe", "groupe_client"],
   credit_limit: ["credit_limit", "plafond", "plafond_credit", "plafond_de_credit", "limite_credit"],
+  contact_name: ["contact", "contact_name", "contact_person", "personne_contact", "interlocuteur", "responsable"],
+  tax_id: ["tax_id", "tax_number", "niu", "numero_contribuable", "nif", "numero_fiscal"],
   payment_terms_days: ["payment_terms_days", "payment_terms", "terms", "delai", "delai_de_paiement", "jours"],
 };
 const norm = (h: string) => h.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -126,6 +128,53 @@ export class ImportService {
       Code: c.code, Name: c.name, Phone: c.phone ?? "", Email: c.email ?? "", Address: c.address ?? "", Group: groups.find((g) => g.id === c.customer_group_id)?.name ?? "",
       ...(credit ? { "Credit limit": String(c.credit_limit), "Payment terms (days)": String(c.payment_terms_days) } : {}), Active: c.active ? "yes" : "no",
     }));
+  }
+
+  async exportSuppliers(auth: AuthContext) {
+    const rows = await this.prisma.client.supplier.findMany({ where: { business_id: auth.businessId }, orderBy: { name: "asc" } });
+    return rows.map((x) => ({ Code: x.code, Name: x.name, Contact: x.contact_name ?? "", Phone: x.phone ?? "", Email: x.email ?? "", Address: x.address ?? "", "Tax ID": x.tax_id ?? "", "Payment terms (days)": String(x.payment_terms_days), Active: x.active ? "yes" : "no" }));
+  }
+
+  // ---------------------------------------------------------------- suppliers
+  async suppliers(auth: AuthContext, input: { rows: Row[]; dry_run?: boolean }) {
+    assertCan(auth, "data.import"); assertCan(auth, "suppliers.manage");
+    if (input.rows.length > MAX_ROWS) throw invalid("TOO_MANY_ROWS", `Import at most ${MAX_ROWS} rows at a time`);
+    const dry = input.dry_run !== false;
+    const b = auth.businessId, db = this.prisma.client;
+    const existingAll = await db.supplier.findMany({ where: { business_id: b } });
+    const lc = (x: string) => x.trim().toLowerCase();
+    const seen = new Set<string>();
+    const plans = input.rows.map((raw, i) => {
+      const c = canonical(raw);
+      const r: RowResult = { row: i + 2, action: "create", label: c.name ?? c.sku ?? "", errors: [], warnings: [] };
+      if (!Object.keys(c).length) { r.action = "skip"; return { r, c }; }
+      const code = c.sku?.toUpperCase().slice(0, 24);
+      const existing = (code && existingAll.find((x) => x.code === code)) || (c.name ? existingAll.find((x) => lc(x.name) === lc(c.name!)) : undefined) || undefined;
+      if (existing) { r.action = "update"; r.label = `${existing.code} — ${existing.name}`; }
+      if (!existing && (!c.name || c.name.length < 2)) r.errors.push("Name is required");
+      const key = code ?? lc(c.name ?? "");
+      if (key) { if (seen.has(key)) r.errors.push("This supplier appears twice in the file"); seen.add(key); }
+      if (c.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email)) r.errors.push(`Email "${c.email}" is not valid`);
+      const terms = parseNumber(c.payment_terms_days);
+      if (terms != null && (Number.isNaN(terms) || terms < 0 || !Number.isInteger(terms))) r.errors.push("Payment terms must be a whole number of days");
+      return { r, c, existing, code, terms };
+    });
+    const rows = plans.map((p) => p.r);
+    if (dry || rows.some((r) => r.errors.length)) return summarise(true, rows);
+    await this.prisma.tx(async (tx) => {
+      for (const p of plans) {
+        if (p.r.action === "skip") continue;
+        const data = { name: p.c.name ?? undefined, contact_name: p.c.contact_name ?? undefined, phone: p.c.phone ?? undefined, email: p.c.email ?? undefined, address: p.c.address ?? undefined, tax_id: p.c.tax_id ?? undefined, payment_terms_days: p.terms ?? undefined };
+        if (p.existing) await tx.supplier.update({ where: { id: p.existing.id }, data });
+        else {
+          let code = p.code ?? codeFrom(p.c.name!, 20);
+          for (let n = 2; await tx.supplier.findFirst({ where: { business_id: b, code } }); n++) code = `${(p.code ?? codeFrom(p.c.name!, 20)).slice(0, 20)}-${n}`;
+          await tx.supplier.create({ data: { business_id: b, code, ...data, name: p.c.name! } });
+        }
+      }
+      await this.audit.record(auth, { action: "import.suppliers", entityType: "import", entityId: auth.userId, summary: `Supplier import: ${rows.filter((r) => r.action === "create").length} created, ${rows.filter((r) => r.action === "update").length} updated` }, tx);
+    }, { timeout: 120_000 });
+    return summarise(false, rows);
   }
 
   // ---------------------------------------------------------------- products

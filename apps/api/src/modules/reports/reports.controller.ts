@@ -29,14 +29,16 @@ export class ReportsController {
     const today = businessDate(new Date(), b.timezone);
     return { from: q.from ?? today, to: q.to ?? today, branch_id: q.branch_id };
   }
-  private send(res: Response, q: RangeQuery, name: string, data: any, rowsKey?: string) {
+  /** Writes the response itself (JSON or CSV); returns nothing so no interceptor touches the Express response. */
+  private send(res: Response, q: RangeQuery, name: string, data: any, rowsKey?: string): void {
     if (q.format === "csv") {
       const rows = rowsKey ? data[rowsKey] : data;
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="${name}.csv"`);
-      return res.send(toCsv(toJSONSafe(rows)));
+      res.send(toCsv(toJSONSafe(rows)));
+      return;
     }
-    return res.json(toJSONSafe(data));
+    res.json(toJSONSafe(data));
   }
 
   @Get("dashboard") @RequirePermissions("dashboard.view")

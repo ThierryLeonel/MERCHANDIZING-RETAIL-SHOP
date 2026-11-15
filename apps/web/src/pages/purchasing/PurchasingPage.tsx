@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, useToast } from "../../components/ui";
 import { api } from "../../lib/api";
 import { date, dateTime, humanize, money, qty, today } from "../../lib/format";
@@ -9,7 +9,8 @@ import { useSession } from "../../lib/session";
 
 export default function PurchasingPage() {
   const { can } = useSession();
-  const [tab, setTab] = useState(can("purchasing.view") ? "orders" : "suppliers");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") ?? (can("purchasing.view") ? "orders" : "suppliers"));
   return (
     <div>
       <PageHeader title="Purchasing" subtitle="Order → approve → receive (accepted / damaged / rejected) → match supplier invoice → pay" actions={can("purchasing.manage") && <Link to="/purchasing/orders/new"><Button icon={<Plus className="h-4 w-4" />}>New purchase order</Button></Link>} />
@@ -154,26 +155,63 @@ function PayForm({ invoice, onClose, onDone }: { invoice: any; onClose: () => vo
 
 function Suppliers() {
   const { can } = useSession();
+  const toast = useToast();
   const list = useList<any>("/suppliers", {}, { sort: "name", order: "asc" });
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ code: "", name: "", phone: "", email: "", payment_terms_days: "0" });
-  const [err, setErr] = useState<unknown>(null);
-  const save = async () => { setErr(null); try { await api("/suppliers", { body: { ...f, email: f.email || undefined, phone: f.phone || undefined, payment_terms_days: Number(f.payment_terms_days) } }); setOpen(false); list.refetch(); } catch (e) { setErr(e); } };
+  const [editing, setEditing] = useState<any>(null);
   return (
-    <Card padded={false} actions={can("suppliers.manage") && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>New supplier</Button>} title="Suppliers">
+    <Card padded={false} title="Suppliers" actions={<div className="flex gap-2">
+      {can("data.import") && <Link to="/import?type=suppliers"><Button size="sm" variant="secondary">Import / export</Button></Link>}
+      {can("suppliers.manage") && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing({})}>New supplier</Button>}
+    </div>}>
       <div className="border-b border-slate-200 p-3"><SearchInput value={list.search} onChange={list.setSearch} /></div>
       <DataTable rows={list.data?.items} loading={list.isLoading} error={list.error} sort={list.sort} onSort={list.onSort} columns={[
-        { key: "code", header: "Code", sortable: true }, { key: "name", header: "Name", sortable: true }, { key: "phone", header: "Phone" }, { key: "email", header: "Email" },
+        { key: "code", header: "Code", sortable: true }, { key: "name", header: "Name", sortable: true, render: (s) => <span className={s.active === false ? "text-slate-400 line-through" : ""}>{s.name}</span> },
+        { key: "contact_name", header: "Contact", render: (s) => s.contact_name ?? "—" }, { key: "phone", header: "Phone", render: (s) => s.phone ?? "—" },
         { key: "payment_terms_days", header: "Terms", render: (s) => (s.payment_terms_days ? `${s.payment_terms_days} days` : "Cash") },
+        { key: "e", header: "", align: "right", render: (s) => can("suppliers.manage") && <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>Edit</Button> },
       ]} />
       {list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.total} onPage={list.setPage} />}
-      <Modal open={open} onClose={() => setOpen(false)} title="New supplier" footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={save} disabled={!f.code || !f.name}>Save</Button></>}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {(["code", "name", "phone", "email", "payment_terms_days"] as const).map((k) => <Field key={k} label={humanize(k)}>{(id) => <Input id={id} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />}</Field>)}
-        </div>
-        <ErrorText error={err} />
-      </Modal>
+      {editing && <SupplierForm supplier={editing} onClose={() => setEditing(null)} onSaved={(m) => { setEditing(null); list.refetch(); toast(m); }} />}
     </Card>
+  );
+}
+
+function SupplierForm({ supplier, onClose, onSaved }: { supplier: any; onClose: () => void; onSaved: (msg: string) => void }) {
+  const isNew = !supplier.id;
+  const [f, setF] = useState({ code: supplier.code ?? "", name: supplier.name ?? "", contact_name: supplier.contact_name ?? "", phone: supplier.phone ?? "", email: supplier.email ?? "", address: supplier.address ?? "", tax_id: supplier.tax_id ?? "", payment_terms_days: String(supplier.payment_terms_days ?? 0), active: supplier.active ?? true });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const opt = (v: string) => (v.trim() ? v.trim() : undefined);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const body = { name: f.name, contact_name: opt(f.contact_name), phone: opt(f.phone), email: opt(f.email), address: opt(f.address), tax_id: opt(f.tax_id), payment_terms_days: Number(f.payment_terms_days) || 0 };
+      if (isNew) await api("/suppliers", { body: { ...body, code: f.code } }); else await api(`/suppliers/${supplier.id}`, { method: "PATCH", body: { ...body, active: f.active } });
+      onSaved(isNew ? `${f.name} added` : `${f.name} saved`);
+    } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete ${supplier.name}? Only suppliers never ordered from, invoiced or paid can be deleted.`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/suppliers/${supplier.id}`, { method: "DELETE" }); onSaved(`${supplier.name} deleted`); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  const field = (k: keyof typeof f, label: string, extra: { required?: boolean; disabled?: boolean } = {}) => (
+    <Field label={label} required={extra.required}>{(id) => <Input id={id} value={String(f[k])} disabled={extra.disabled} onChange={(e) => setF({ ...f, [k]: e.target.value })} />}</Field>
+  );
+  return (
+    <Modal open onClose={onClose} title={isNew ? "New supplier" : `Edit ${supplier.name}`} footer={<>
+      {!isNew && <Button variant="ghost" className="mr-auto text-red-700" disabled={busy} onClick={remove}>Delete</Button>}
+      <Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.name || (isNew && f.code.length < 2)} onClick={save}>Save</Button>
+    </>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {field("code", "Code", { required: true, disabled: !isNew })}{field("name", "Name", { required: true })}
+        {field("contact_name", "Contact person")}{field("phone", "Phone")}
+        {field("email", "Email")}{field("tax_id", "Tax ID (NIU)")}
+        <div className="sm:col-span-2">{field("address", "Address")}</div>
+        {field("payment_terms_days", "Payment terms (days)")}
+        {!isNew && <label className="flex items-center gap-2 self-end pb-2 text-sm"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active</label>}
+        <div className="sm:col-span-2"><ErrorText error={err} /></div>
+      </div>
+    </Modal>
   );
 }
 

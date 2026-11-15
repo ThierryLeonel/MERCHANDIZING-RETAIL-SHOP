@@ -5,9 +5,10 @@ import { Badge, Button, Card, DataTable, ErrorText, Field, PageHeader, Select, T
 import { api } from "../../lib/api";
 import { useSession } from "../../lib/session";
 import { downloadXlsx, readRows, SheetRow } from "../../lib/spreadsheet";
+import { SAMPLE_CUSTOMERS, SAMPLE_SUPPLIERS } from "./sample-contacts";
 import { starterRows, STARTER_COLUMNS } from "./starter-catalogue";
 
-type Kind = "products" | "stock" | "customers";
+type Kind = "products" | "stock" | "customers" | "suppliers";
 interface RowResult { row: number; action: "create" | "update" | "skip"; label: string; errors: string[]; warnings: string[] }
 interface ImportResult { dry_run: boolean; ok: boolean; created: number; updated: number; skipped: number; errors: number; rows: RowResult[]; opening_stock?: { number: string; lines: number; total: string } | null }
 
@@ -41,6 +42,16 @@ const TEMPLATES: Record<Kind, { columns: string[]; help: [string, string][] }> =
       ["Expiry", "Optional, YYYY-MM-DD or DD/MM/YYYY."],
     ],
   },
+  suppliers: {
+    columns: ["Code", "Name", "Contact", "Phone", "Email", "Address", "Tax ID", "Payment terms (days)"],
+    help: [
+      ["Code", "Short supplier code. Leave empty to generate one from the name. Existing suppliers are matched by code, then by exact name, and updated."],
+      ["Name", "Required for new suppliers."],
+      ["Contact", "Person you deal with."],
+      ["Tax ID", "Supplier's taxpayer number (NIU), if known."],
+      ["Payment terms (days)", "0 = pay on delivery."],
+    ],
+  },
   customers: {
     columns: ["Name", "Phone", "Email", "Address", "Group", "Credit limit", "Payment terms (days)"],
     help: [
@@ -60,6 +71,7 @@ export default function ImportPage() {
     { key: "products", label: "Products & categories", hidden: !can("products.manage") },
     { key: "stock", label: "Opening stock", hidden: !can("inventory.opening") },
     { key: "customers", label: "Customers", hidden: !can("customers.manage") },
+    { key: "suppliers", label: "Suppliers", hidden: !can("suppliers.manage") },
   ];
   const first = (tabs.find((t) => !t.hidden)?.key ?? "products") as Kind;
   const kind = ((params.get("type") as Kind) && !tabs.find((t) => t.key === params.get("type"))?.hidden ? params.get("type") : first) as Kind;
@@ -86,7 +98,7 @@ function ImportPanel({ kind }: { kind: Kind }) {
   const stockBranches = me?.branches ?? [];
   const hasQty = kind === "products" && !!source?.rows.some((r) => Object.keys(r).some((k) => /^(quantity|qty|quantit|stock)/i.test(k) && r[k]));
 
-  const body = (dry: boolean) => ({ rows: source!.rows, dry_run: dry, ...(kind !== "customers" && branch ? { branch_id: branch } : {}) });
+  const body = (dry: boolean) => ({ rows: source!.rows, dry_run: dry, ...((kind === "products" || kind === "stock") && branch ? { branch_id: branch } : {}) });
   const check = async () => {
     if (!source) return;
     if (kind === "stock" && !branch) { setPlan(null); return; }
@@ -128,7 +140,7 @@ function ImportPanel({ kind }: { kind: Kind }) {
   };
 
   const shown = useMemo(() => (plan?.rows ?? []).filter((r) => r.action !== "skip" && (!onlyProblems || r.errors.length || r.warnings.length)), [plan, onlyProblems]);
-  const label = kind === "products" ? "products" : kind === "stock" ? "stock lines" : "customers";
+  const label = kind === "products" ? "products" : kind === "stock" ? "stock lines" : kind;
 
   return (
     <div className="space-y-4">
@@ -142,7 +154,17 @@ function ImportPanel({ kind }: { kind: Kind }) {
             {kind === "products" && "Fill in the template, or download your current products, change names, prices or categories in Excel and import the file back — rows are matched by SKU, so they update instead of duplicating."}
             {kind === "stock" && "List each product with the quantity you have and what it cost you. Use this once when you start, to load the stock already on your shelves."}
             {kind === "customers" && "Fill in the template or download your current customer list, edit it in Excel and import it back — customers are matched by phone number."}
+            {kind === "suppliers" && "Fill in the template or download your current suppliers, edit them in Excel and import the file back — suppliers are matched by code (or exact name)."}
           </p>
+          {(kind === "customers" || kind === "suppliers") && (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-center gap-2 font-medium text-emerald-900"><Sparkles className="h-4 w-4" /> Sample {kind}</div>
+              <p className="mt-1 text-sm text-emerald-900">{kind === "customers" ? SAMPLE_CUSTOMERS.length : SAMPLE_SUPPLIERS.length} example {kind} marked “(sample)”, without phone numbers. Load them, then rename them into real contacts or delete them — unused contacts can be deleted any time.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => { setDone(null); setSource({ name: `Sample ${kind}`, rows: kind === "customers" ? SAMPLE_CUSTOMERS : SAMPLE_SUPPLIERS }); }}>Use the sample {kind}</Button>
+              </div>
+            </div>
+          )}
           {kind === "products" && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
               <div className="flex items-center gap-2 font-medium text-emerald-900"><Sparkles className="h-4 w-4" /> Starter catalogue for a mini-supermarket</div>
@@ -158,7 +180,7 @@ function ImportPanel({ kind }: { kind: Kind }) {
           <input ref={fileRef} type="file" accept=".xlsx,.csv,.txt" className="hidden" onChange={onFile} aria-label="Spreadsheet file" />
           <Button icon={<Upload className="h-4 w-4" />} onClick={() => fileRef.current?.click()}>Choose Excel or CSV file…</Button>
           {source && <p className="mt-2 text-sm text-slate-700"><b>{source.name}</b> — {source.rows.length} row(s)</p>}
-          {kind !== "customers" && (
+          {(kind === "products" || kind === "stock") && (
             <Field label={kind === "stock" ? "Branch receiving the stock" : "Opening stock branch (optional)"} hint={kind === "products" ? (hasQty ? "Your file has quantities: choose a branch to load them as opening stock, or leave empty to ignore them" : "Only needed if your file has Quantity and Unit cost columns") : "Quantities are added to this branch's main sales floor"} className="mt-3 max-w-sm">
               {(id, d) => <Select id={id} aria-describedby={d} value={branch} onChange={(e) => setBranch(e.target.value)}>
                 <option value="">{kind === "stock" ? "Choose a branch…" : "— Don't import stock —"}</option>
@@ -205,6 +227,7 @@ function ImportPanel({ kind }: { kind: Kind }) {
                 {kind === "products" && <Link className="text-brand-700 hover:underline" to="/products">Go to Products</Link>}
                 {kind === "stock" && <Link className="text-brand-700 hover:underline" to="/inventory">Go to Inventory</Link>}
                 {kind === "customers" && <Link className="text-brand-700 hover:underline" to="/customers">Go to Customers</Link>}
+                {kind === "suppliers" && <Link className="text-brand-700 hover:underline" to="/purchasing?tab=suppliers">Go to Suppliers</Link>}
               </p>
             </div>
           </div>

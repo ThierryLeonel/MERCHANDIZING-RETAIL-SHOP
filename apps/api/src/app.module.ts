@@ -1,3 +1,5 @@
+import { MaintenanceService } from "./modules/admin/maintenance.service";
+import { ChartService } from "./modules/accounting/chart.service";
 import { DataController } from "./modules/data/data.controller";
 import { ImportService } from "./modules/data/import.service";
 import { Module } from "@nestjs/common";
@@ -44,7 +46,7 @@ import { SystemController } from "./modules/system/system.controller";
 export const SERVICES = [
   PrismaService, AuditService, SequenceService, SettingsService, PostingService, ApprovalsService, StockLedgerService, PricingService,
   AuthService, CatalogueService, PurchasingService, InventoryService, SalesService, FinanceService, CustomersService, AccountingService,
-  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService,
+  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService,
 ];
 
 @Module({

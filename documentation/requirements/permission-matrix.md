@@ -61,6 +61,8 @@ Roles are editable per business (Administration → Roles). An administrator can
 | `admin.audit` | View audit log | ✓ |  |  |  |  |  | ✓ | ✓ |
 | `transactions.void` ★ | Void sales, expenses and payments (posts reversing entries; records are kept) | ✓ |  |  |  |  |  |  |  |
 | `data.import` ★ | Import products, opening stock and customers from spreadsheets | ✓ |  |  |  |  |  |  |  |
+| `admin.backup` ★ | Download a full backup of the application data | ✓ |  |  |  |  |  |  |  |
+| `admin.reset` ★ | Clear the application (delete transactions or all business data) | ✓ |  |  |  |  |  |  |  |
 
 ★ sensitive permission.
 

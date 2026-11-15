@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { Link } from "react-router";
 import { useApprovalFlow } from "../../components/approval";
 import { Badge, Button, Card, cx, ErrorState, ErrorText, Field, Input, Modal, Money, Select, Spinner, Status, Textarea, useToast } from "../../components/ui";
+import { printReceipt } from "../../components/print";
 import { api, ApiError, newIdempotencyKey, qs } from "../../lib/api";
 import { humanize, money, qty, sumStrings } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
@@ -339,7 +340,7 @@ function SaleResult({ sale, onClose, onUpdate }: { sale: any; onClose: () => voi
   const act = async (fn: () => Promise<any>) => { setErr(null); try { await fn(); onUpdate(await api(`/sales/${sale.id}`)); } catch (e) { setErr(e); } };
   if (!pending) {
     return (
-      <Modal open onClose={onClose} title={sale.status === "COMPLETED" ? `Sale ${sale.number} completed` : `Sale ${sale.number}`} footer={<><Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>Print receipt</Button><Button onClick={onClose}>New sale</Button></>}>
+      <Modal open onClose={onClose} title={sale.status === "COMPLETED" ? `Sale ${sale.number} completed` : `Sale ${sale.number}`} footer={<><Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => printReceipt()}>Print receipt</Button><Button onClick={onClose}>New sale</Button></>}>
         {Number(sale.change_given) > 0 && <div className="mb-3 rounded-md bg-emerald-50 p-3 text-center text-emerald-800">Change due: <strong className="num text-xl">{money(sale.change_given)}</strong></div>}
         <div className="rounded border border-slate-200"><Receipt sale={sale} /></div>
       </Modal>

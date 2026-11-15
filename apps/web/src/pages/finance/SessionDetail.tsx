@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router";
+import { PrintButton, PrintSheet } from "../../components/print";
 import { Card, DataTable, ErrorState, Money, PageHeader, Spinner, Status } from "../../components/ui";
 import { dateTime, humanize, money } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
@@ -12,7 +13,9 @@ export default function SessionDetail() {
   const s = data.session;
   return (
     <div className="space-y-5">
-      <PageHeader title={`Cashier session ${s.number}`} subtitle={<>{dateTime(s.opened_at)} → {s.closed_at ? dateTime(s.closed_at) : "open"} · <Status value={s.status} /></>} />
+      <PageHeader title={`Cashier session ${s.number}`} subtitle={<>{dateTime(s.opened_at)} → {s.closed_at ? dateTime(s.closed_at) : "open"} · <Status value={s.status} /></>} actions={<PrintButton target="session-sheet" label={s.closed_at ? "Print Z report" : "Print X report"} />} />
+      <PrintSheet id="session-sheet" title={`${s.closed_at ? "Z" : "X"} report — cashier session ${s.number}`} subtitle={<>{dateTime(s.opened_at)} → {s.closed_at ? dateTime(s.closed_at) : "still open"}</>}>
+      <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="Cash reconciliation">
           <dl className="space-y-1 text-sm">
@@ -27,6 +30,8 @@ export default function SessionDetail() {
         </Card>
       </div>
       <Card title="Cash movements" padded={false}><DataTable rows={data.movements} columns={[{ key: "created_at", header: "When", render: (m: any) => dateTime(m.created_at) }, { key: "kind", header: "Type", render: (m: any) => humanize(m.kind) }, { key: "reason", header: "Reason" }, { key: "amount", header: "Amount", align: "right", render: (m: any) => money(m.amount) }]} /></Card>
+      </div>
+      </PrintSheet>
       <Card title="Sales" padded={false}><DataTable rows={sales.data?.items} columns={[{ key: "number", header: "Sale", render: (x: any) => <Link className="text-brand-700 hover:underline" to={`/sales/${x.id}`}>{x.number}</Link> }, { key: "created_at", header: "When", render: (x: any) => dateTime(x.created_at) }, { key: "status", header: "Status", render: (x: any) => <Status value={x.status} /> }, { key: "total", header: "Total", align: "right", render: (x: any) => money(x.total) }]} /></Card>
     </div>
   );

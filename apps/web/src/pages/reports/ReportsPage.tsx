@@ -1,6 +1,7 @@
 import { Download } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { PrintButton, PrintSheet } from "../../components/print";
 import { Button, Card, cx, DataTable, ErrorState, Field, Input, PageHeader, Select, Spinner, useToast } from "../../components/ui";
 import { downloadCsv, qs } from "../../lib/api";
 import { date, dateTime, humanize, money, qty, today } from "../../lib/format";
@@ -56,7 +57,7 @@ export default function ReportsPage() {
         {available.map((r) => <button key={r.key} onClick={() => setKey(r.key)} className={cx("block w-full rounded-md px-3 py-2 text-left text-sm", r.key === key ? "bg-brand-50 font-medium text-brand-800" : "text-slate-600 hover:bg-slate-100")}>{r.title}</button>)}
       </nav>
       <div className="min-w-0 space-y-4">
-        <PageHeader title={def.title} subtitle={def.definition} actions={<Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => downloadCsv(`${def.path}${qs({ ...params, format: "csv" })}`, `${def.key}-${from}.csv`).catch((e) => toast(e.message, "error"))}>Export CSV</Button>} />
+        <PageHeader title={def.title} subtitle={def.definition} actions={<><PrintButton target="report-sheet" /><Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => downloadCsv(`${def.path}${qs({ ...params, format: "csv" })}`, `${def.key}-${from}.csv`).catch((e) => toast(e.message, "error"))}>Export CSV</Button></>} />
         <Card>
           <div className="flex flex-wrap items-end gap-3">
             {def.range && <><Field label="From">{(id) => <Input id={id} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}</Field><Field label="To">{(id) => <Input id={id} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}</Field></>}
@@ -65,7 +66,9 @@ export default function ReportsPage() {
             {def.days && <Field label="No sale in (days)">{(id) => <Input id={id} value={days} onChange={(e) => setDays(e.target.value)} className="w-24" />}</Field>}
           </div>
         </Card>
-        <Card padded={false}>{q.error ? <div className="p-4"><ErrorState error={q.error} onRetry={q.refetch} /></div> : q.isLoading && !rows ? <Spinner /> : <DataTable rowKey="__id" rows={rows} columns={cols.map((c) => ({ key: c.key, header: c.header, align: c.kind === "money" || c.kind === "qty" ? "right" : undefined, render: render(c) }))} />}</Card>
+        <PrintSheet id="report-sheet" title={def.title} subtitle={<>{def.range ? `${date(from)} – ${date(to)}` : `As of ${date(new Date().toISOString())}`}{def.branch && ` · ${branch ? me?.branches.find((b) => b.id === branch)?.name : "All branches"}`}{def.dims && ` · by ${humanize(dimension)}`}{def.days && ` · no sale in ${days} days`}</>}>
+          <Card padded={false}>{q.error ? <div className="p-4"><ErrorState error={q.error} onRetry={q.refetch} /></div> : q.isLoading && !rows ? <Spinner /> : <DataTable rowKey="__id" rows={rows} columns={cols.map((c) => ({ key: c.key, header: c.header, align: c.kind === "money" || c.kind === "qty" ? "right" : undefined, render: render(c) }))} />}</Card>
+        </PrintSheet>
       </div>
     </div>
   );

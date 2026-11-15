@@ -59,6 +59,21 @@ export const qs = (o: Record<string, unknown>) => {
 };
 
 /** Downloads an authenticated CSV export. */
+/** Downloads an authenticated file; the server's Content-Disposition file name wins when present. */
+export async function downloadFile(path: string, fallbackName: string) {
+  const res = await api<Response>(path, { raw: true });
+  if (!res.ok) {
+    let msg = "Download failed";
+    try { msg = (await res.json()).error?.message ?? msg; } catch { /* not JSON */ }
+    throw new ApiError(res.status, "DOWNLOAD_FAILED", msg);
+  }
+  const name = res.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 export async function downloadCsv(path: string, filename: string) {
   const res = await api<Response>(path, { raw: true });
   if (!res.ok) throw new ApiError(res.status, "EXPORT_FAILED", "Export failed");

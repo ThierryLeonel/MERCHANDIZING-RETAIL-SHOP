@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
+import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from "class-validator";
 import { Auth, AuthContext, RequirePermissions } from "../../common/auth-context";
 import { AuditService } from "../../common/audit.service";
-import { notFound } from "../../common/errors";
+import { invalid, notFound } from "../../common/errors";
 import { Idempotent } from "../../common/idempotency";
 import { PageQuery, pageArgs, paginate } from "../../common/pagination";
 import { PrismaService } from "../../common/prisma.service";
@@ -20,6 +20,16 @@ class SupplierDto {
   @IsOptional() @IsString() address?: string;
   @IsOptional() @IsString() tax_id?: string;
   @IsOptional() @IsInt() @Min(0) payment_terms_days?: number;
+}
+class UpdateSupplierDto {
+  @IsOptional() @IsString() @MinLength(2) name?: string;
+  @IsOptional() @IsString() contact_name?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() tax_id?: string;
+  @IsOptional() @IsInt() @Min(0) payment_terms_days?: number;
+  @IsOptional() @IsBoolean() active?: boolean;
 }
 class PoLineDto {
   @IsUUID() variant_id: string;
@@ -120,13 +130,32 @@ export class PurchasingController {
   }
 
   @Patch("suppliers/:id") @RequirePermissions("suppliers.manage")
-  async updateSupplier(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: Partial<SupplierDto>) {
+  async updateSupplier(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateSupplierDto) {
     const s = await this.prisma.client.supplier.findFirst({ where: { id, business_id: a.businessId } });
     if (!s) throw notFound("Supplier");
-    const { code: _ignored, ...rest } = dto;
+    const rest = { name: dto.name, contact_name: dto.contact_name, phone: dto.phone, email: dto.email, address: dto.address, tax_id: dto.tax_id, payment_terms_days: dto.payment_terms_days, active: dto.active };
     const u = await this.prisma.client.supplier.update({ where: { id }, data: rest });
     await this.audit.record(a, { action: "supplier.updated", entityType: "supplier", entityId: id, summary: `Supplier ${s.name} updated`, data: rest });
     return u;
+  }
+
+  /** Deletes a supplier that was never ordered from, received from, invoiced or paid. */
+  @Delete("suppliers/:id") @RequirePermissions("suppliers.manage")
+  async deleteSupplier(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) {
+    const db = this.prisma.client;
+    const s = await db.supplier.findFirst({ where: { id, business_id: a.businessId } });
+    if (!s) throw notFound("Supplier");
+    const used = (await Promise.all([
+      db.purchaseOrder.count({ where: { supplier_id: id } }), db.goodsReceipt.count({ where: { supplier_id: id } }), db.supplierInvoice.count({ where: { supplier_id: id } }),
+      db.supplierPayment.count({ where: { supplier_id: id } }), db.journalLine.count({ where: { supplier_id: id } }),
+    ])).reduce((x, y) => x + y, 0);
+    if (used) throw invalid("SUPPLIER_IN_USE", `${s.name} has orders, receipts, invoices or payments and cannot be deleted — mark it inactive instead`);
+    await this.prisma.tx(async (tx) => {
+      await tx.productVariant.updateMany({ where: { preferred_supplier_id: id }, data: { preferred_supplier_id: null } });
+      await tx.supplier.delete({ where: { id } });
+      await this.audit.record(a, { action: "supplier.deleted", entityType: "supplier", entityId: id, summary: `Supplier "${s.name}" deleted` }, tx);
+    });
+    return { id, deleted: true };
   }
 
   @Get("purchase-orders") @RequirePermissions("purchasing.view")

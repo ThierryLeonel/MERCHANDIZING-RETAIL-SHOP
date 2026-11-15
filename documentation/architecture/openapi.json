@@ -857,6 +857,37 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSupplierDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Purchasing"
+        ]
+      },
+      "delete": {
+        "operationId": "PurchasingController_deleteSupplier",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -2915,6 +2946,82 @@
         "tags": [
           "Finance"
         ]
+      },
+      "post": {
+        "operationId": "FinanceController_createAccount",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinancialAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/financial-accounts/{id}": {
+      "patch": {
+        "operationId": "FinanceController_updateAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFinancialAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Finance"
+        ]
+      },
+      "delete": {
+        "operationId": "FinanceController_deleteAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Finance"
+        ]
       }
     },
     "/api/v1/financial-accounts/options": {
@@ -3412,6 +3519,70 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      }
+    },
+    "/api/v1/accounting/accounts/{id}": {
+      "patch": {
+        "operationId": "AccountingController_updateAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      },
+      "delete": {
+        "operationId": "AccountingController_deleteAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -4078,6 +4249,44 @@
         ]
       }
     },
+    "/api/v1/admin/backup": {
+      "get": {
+        "operationId": "AdminController_backup",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/clear": {
+      "post": {
+        "operationId": "AdminController_clear",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/settings": {
       "get": {
         "operationId": "AdminController_settings",
@@ -4087,13 +4296,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       },
       "patch": {
@@ -4114,13 +4318,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4133,13 +4332,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       },
       "post": {
@@ -4160,13 +4354,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4189,13 +4378,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4208,13 +4392,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       },
       "post": {
@@ -4235,13 +4414,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4300,13 +4474,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       },
       "post": {
@@ -4327,13 +4496,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4365,13 +4529,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4384,13 +4543,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4422,13 +4576,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4441,13 +4590,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       },
       "post": {
@@ -4468,13 +4612,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4487,13 +4626,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4525,13 +4659,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4553,13 +4682,8 @@
             "description": ""
           }
         },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
         "tags": [
-          "admin"
+          "Admin"
         ]
       }
     },
@@ -4933,6 +5057,54 @@
         ]
       }
     },
+    "/api/v1/imports/suppliers/export": {
+      "get": {
+        "operationId": "DataController_exportSuppliers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/v1/imports/suppliers": {
+      "post": {
+        "operationId": "DataController_suppliers",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "imports"
+        ]
+      }
+    },
     "/api/v1/imports/customers": {
       "post": {
         "operationId": "DataController_customers",
@@ -5017,6 +5189,10 @@
         "properties": {}
       },
       "SupplierDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateSupplierDto": {
         "type": "object",
         "properties": {}
       },
@@ -5124,6 +5300,14 @@
         "type": "object",
         "properties": {}
       },
+      "FinancialAccountDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateFinancialAccountDto": {
+        "type": "object",
+        "properties": {}
+      },
       "ExpenseDto": {
         "type": "object",
         "properties": {}
@@ -5144,11 +5328,19 @@
         "type": "object",
         "properties": {}
       },
+      "UpdateAccountDto": {
+        "type": "object",
+        "properties": {}
+      },
       "RuleDto": {
         "type": "object",
         "properties": {}
       },
       "ManualJournalDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ClearDto": {
         "type": "object",
         "properties": {}
       },

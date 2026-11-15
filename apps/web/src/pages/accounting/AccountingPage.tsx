@@ -1,8 +1,9 @@
 import { CheckCircle2, Plus, XCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, cx, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, useToast } from "../../components/ui";
 import { api, qs } from "../../lib/api";
+import { PrintButton, PrintSheet } from "../../components/print";
 import { date, dateTime, humanize, money, sumStrings, today } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
@@ -45,7 +46,8 @@ function ProfitLoss() {
   const q = useApi<any>(`/accounting/profit-and-loss${qs({ from, to })}`, [from, to]);
   const d = q.data;
   return (
-    <Card title="Profit and loss" actions={<div className="flex gap-2"><Input aria-label="From" type="date" className="h-8" value={from} onChange={(e) => setFrom(e.target.value)} /><Input aria-label="To" type="date" className="h-8" value={to} onChange={(e) => setTo(e.target.value)} /></div>}>
+    <PrintSheet id="pl-sheet" title={"Profit and loss"} subtitle={`${date(from)} – ${date(to)}`}>
+    <Card title="Profit and loss" actions={<div className="flex gap-2"><PrintButton target="pl-sheet" size="sm" /><Input aria-label="From" type="date" className="h-8" value={from} onChange={(e) => setFrom(e.target.value)} /><Input aria-label="To" type="date" className="h-8" value={to} onChange={(e) => setTo(e.target.value)} /></div>}>
       {!d ? <ErrorText error={q.error} /> : (
         <div className="max-w-2xl">
           <Section title="Revenue (tax-exclusive, net of returns)" rows={d.revenue} total={d.net_revenue} label="Net revenue" />
@@ -58,6 +60,7 @@ function ProfitLoss() {
         </div>
       )}
     </Card>
+    </PrintSheet>
   );
 }
 
@@ -66,7 +69,8 @@ function BalanceSheet() {
   const q = useApi<any>(`/accounting/balance-sheet?as_of=${asOf}`, [asOf]);
   const d = q.data;
   return (
-    <Card title="Balance sheet" actions={<Input aria-label="As of" type="date" className="h-8" value={asOf} onChange={(e) => setAsOf(e.target.value)} />}>
+    <PrintSheet id="bs-sheet" title={"Balance sheet"} subtitle={`As of ${date(asOf)}`}>
+    <Card title="Balance sheet" actions={<div className="flex gap-2"><PrintButton target="bs-sheet" size="sm" /><Input aria-label="As of" type="date" className="h-8" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></div>}>
       {!d ? <ErrorText error={q.error} /> : (
         <div className="grid max-w-4xl gap-8 md:grid-cols-2">
           <div><Section title="Assets" rows={d.assets} total={d.total_assets} /></div>
@@ -78,6 +82,7 @@ function BalanceSheet() {
         </div>
       )}
     </Card>
+    </PrintSheet>
   );
 }
 
@@ -85,19 +90,22 @@ function TrialBalance() {
   const [asOf, setAsOf] = useState(today());
   const q = useApi<any>(`/accounting/trial-balance?as_of=${asOf}`, [asOf]);
   return (
-    <Card padded={false} title={<>Trial balance {q.data && (q.data.balanced ? <Badge tone="green">Balanced</Badge> : <Badge tone="red">Unbalanced</Badge>)}</>} actions={<Input aria-label="As of" type="date" className="h-8" value={asOf} onChange={(e) => setAsOf(e.target.value)} />}>
+    <PrintSheet id="tb-sheet" title={"Trial balance"} subtitle={`As of ${date(asOf)}`}>
+    <Card padded={false} title={<>Trial balance {q.data && (q.data.balanced ? <Badge tone="green">Balanced</Badge> : <Badge tone="red">Unbalanced</Badge>)}</>} actions={<div className="flex gap-2"><PrintButton target="tb-sheet" size="sm" /><Input aria-label="As of" type="date" className="h-8" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></div>}>
       <DataTable rowKey="account_id" rows={q.data?.lines} loading={q.isLoading} error={q.error} columns={[
         { key: "code", header: "Code" }, { key: "name", header: "Account" }, { key: "type", header: "Type", render: (r) => humanize(r.type) },
         { key: "debit", header: "Debit", align: "right", render: (r) => (Number(r.debit) ? money(r.debit) : "") }, { key: "credit", header: "Credit", align: "right", render: (r) => (Number(r.credit) ? money(r.credit) : "") },
       ]} footer={q.data && <tfoot className="border-t-2 border-slate-300 font-semibold"><tr><td className="px-4 py-2" colSpan={3}>Totals</td><td className="num px-4 py-2 text-right">{money(q.data.total_debit)}</td><td className="num px-4 py-2 text-right">{money(q.data.total_credit)}</td></tr></tfoot>} />
     </Card>
+    </PrintSheet>
   );
 }
 
 function Reconciliation() {
   const q = useApi<any>("/accounting/reconciliation");
   return (
-    <Card padded={false} title="Sub-ledger to control-account reconciliation" actions={<Button size="sm" variant="secondary" onClick={() => q.refetch()}>Re-run</Button>}>
+    <PrintSheet id="recon-sheet" title={"Sub-ledger to control-account reconciliation"} subtitle={`As of ${date(new Date().toISOString())}`}>
+    <Card padded={false} title="Sub-ledger to control-account reconciliation" actions={<div className="flex gap-2"><PrintButton target="recon-sheet" size="sm" /><Button size="sm" variant="secondary" onClick={() => q.refetch()}>Re-run</Button></div>}>
       <DataTable rowKey="name" rows={q.data?.checks} loading={q.isLoading} error={q.error} columns={[
         { key: "ok", header: "", render: (c) => (c.ok ? <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-label="Reconciled" /> : <XCircle className="h-5 w-5 text-red-600" aria-label="Difference" />) },
         { key: "name", header: "Check", render: (c) => <div><div className="font-medium">{c.name}</div><div className="text-xs text-slate-500">{c.note}</div></div> },
@@ -106,6 +114,7 @@ function Reconciliation() {
       ]} />
       {q.data && <p className="p-3 text-xs text-slate-500">Tills: {q.data.tills.open_sessions} open session(s); till GL balance {money(q.data.tills.till_gl_balance)}. {q.data.tills.note}.</p>}
     </Card>
+    </PrintSheet>
   );
 }
 
@@ -164,15 +173,62 @@ function ManualJournal({ onClose }: { onClose: () => void }) {
 }
 
 function Chart() {
+  const { can } = useSession();
+  const toast = useToast();
   const q = useApi<any[]>("/accounting/accounts");
+  const [editing, setEditing] = useState<any>(null);
+  const canEdit = can("accounting.periods");
   return (
-    <Card padded={false} title="Chart of accounts" actions={<span className="text-xs text-slate-500">SYSCOHADA-inspired numbering; review with your accountant. Not a certified chart.</span>}>
+    <Card padded={false} title="Chart of accounts" actions={<div className="flex items-center gap-3"><span className="hidden text-xs text-slate-500 lg:inline">SYSCOHADA-inspired numbering; review with your accountant. Not a certified chart.</span>{canEdit && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing({})}>Add account</Button>}</div>}>
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} columns={[
-        { key: "code", header: "Code" }, { key: "name", header: "Name", render: (a) => <span className={a.is_postable ? "" : "font-semibold"}>{a.name}</span> }, { key: "type", header: "Type", render: (a) => humanize(a.type) },
-        { key: "flags", header: "", render: (a) => <div className="flex gap-1">{!a.allow_manual && a.is_postable && <Badge tone="violet">Control</Badge>}{!a.is_postable && <Badge>Header</Badge>}</div> },
+        { key: "code", header: "Code", render: (a) => <span className="font-mono">{a.code}</span> },
+        { key: "name", header: "Name", render: (a) => <span className={cx(a.is_postable ? "" : "font-semibold", !a.active && "text-slate-400 line-through")} style={{ paddingLeft: a.parent_id ? 16 : 0 }}>{a.name}</span> },
+        { key: "type", header: "Type", render: (a) => humanize(a.type) },
+        { key: "flags", header: "", render: (a) => <div className="flex gap-1">{!a.allow_manual && a.is_postable && <Badge tone="violet">System</Badge>}{!a.is_postable && <Badge>Header</Badge>}{!a.active && <Badge tone="red">Inactive</Badge>}</div> },
         { key: "balance", header: "Balance", align: "right", render: (a) => (Number(a.balance) ? money(a.balance) : "") },
+        { key: "e", header: "", align: "right", render: (a) => canEdit && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Edit</Button> },
       ]} />
+      {editing && <AccountForm account={editing} accounts={q.data ?? []} onClose={() => setEditing(null)} onSaved={(msg) => { setEditing(null); q.refetch(); toast(msg); }} />}
     </Card>
+  );
+}
+
+function AccountForm({ account, accounts, onClose, onSaved }: { account: any; accounts: any[]; onClose: () => void; onSaved: (msg: string) => void }) {
+  const isNew = !account.id;
+  const used = Number(account.debit ?? 0) !== 0 || Number(account.credit ?? 0) !== 0;
+  const [f, setF] = useState({ code: account.code ?? "", name: account.name ?? "", type: account.type ?? "EXPENSE", parent_id: account.parent_id ?? "", allow_manual: account.allow_manual ?? true, is_postable: account.is_postable ?? true, active: account.active ?? true });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const parents = accounts.filter((a) => a.id !== account.id && a.type === f.type && a.active);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const body = { code: f.code, name: f.name, type: f.type, parent_id: f.parent_id || (isNew ? undefined : null), allow_manual: f.allow_manual, is_postable: f.is_postable, ...(isNew ? {} : { active: f.active }) };
+      if (isNew) await api("/accounting/accounts", { body }); else await api(`/accounting/accounts/${account.id}`, { method: "PATCH", body });
+      onSaved(isNew ? `Account ${f.code} added` : `Account ${f.code} saved`);
+    } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete account ${account.code} ${account.name}?`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/accounting/accounts/${account.id}`, { method: "DELETE" }); onSaved(`Account ${account.code} deleted`); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={isNew ? "Add account" : `Edit account ${account.code}`} footer={<>
+      {!isNew && <Button variant="ghost" className="mr-auto text-red-700" disabled={busy} onClick={remove}>Delete</Button>}
+      <Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!f.code || f.name.trim().length < 2} onClick={save}>{isNew ? "Add account" : "Save"}</Button>
+    </>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Code" required hint={used ? "Has entries — the code is fixed" : "e.g. 6055"}>{(id, d) => <Input id={id} aria-describedby={d} className="font-mono" value={f.code} disabled={used} onChange={(e) => setF({ ...f, code: e.target.value })} />}</Field>
+        <Field label="Type" required>{(id) => <Select id={id} value={f.type} disabled={used} onChange={(e) => setF({ ...f, type: e.target.value, parent_id: "" })}>{["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"].map((t) => <option key={t} value={t}>{humanize(t)}</option>)}</Select>}</Field>
+        <Field label="Name" required className="sm:col-span-2">{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
+        <Field label="Under (parent account)" className="sm:col-span-2">{(id) => <Select id={id} value={f.parent_id} onChange={(e) => setF({ ...f, parent_id: e.target.value })}><option value="">— None —</option>{parents.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</Select>}</Field>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={!f.is_postable} onChange={(e) => setF({ ...f, is_postable: !e.target.checked })} /> Header account (groups other accounts; takes no entries)</label>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.allow_manual} disabled={!f.is_postable} onChange={(e) => setF({ ...f, allow_manual: e.target.checked })} /> Allow manual journals (untick for accounts only the system should post to)</label>
+        {!isNew && <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active</label>}
+        <p className="text-xs text-slate-500 sm:col-span-2">Accounts used by posting rules, financial accounts, expense categories or tax rates cannot be deleted or deactivated; accounts with entries keep their code and type.</p>
+        <div className="sm:col-span-2"><ErrorText error={err} /></div>
+      </div>
+    </Modal>
   );
 }
 

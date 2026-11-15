@@ -23,16 +23,61 @@ export default function FinancePage() {
 
 function Accounts() {
   const { can } = useSession();
+  const toast = useToast();
   const q = useApi<any[]>("/financial-accounts");
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const manage = can("finance.manage");
   return (
-    <Card padded={false} title="Book balances" actions={can("finance.manage") && <Button size="sm" onClick={() => setOpen(true)}>Internal transfer</Button>}>
+    <Card padded={false} title="Book balances" actions={manage && <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Internal transfer</Button><Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditing({})}>Add account</Button></div>}>
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} columns={[
-        { key: "code", header: "Code" }, { key: "name", header: "Account" }, { key: "kind", header: "Type", render: (a) => <Badge>{humanize(a.kind)}</Badge> },
+        { key: "code", header: "Code" }, { key: "name", header: "Account", render: (a) => <span className={a.active ? "" : "text-slate-400 line-through"}>{a.name}</span> },
+        { key: "kind", header: "Type", render: (a) => <div className="flex gap-1"><Badge>{humanize(a.kind)}</Badge>{!a.active && <Badge tone="red">Inactive</Badge>}</div> },
         { key: "balance", header: "Book balance", align: "right", render: (a) => <strong>{money(a.balance)}</strong> },
+        { key: "e", header: "", align: "right", render: (a) => manage && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Edit</Button> },
       ]} />
-      {open && <TransferForm accounts={q.data ?? []} onClose={() => setOpen(false)} onDone={() => { setOpen(false); q.refetch(); }} />}
+      {open && <TransferForm accounts={(q.data ?? []).filter((a) => a.active)} onClose={() => setOpen(false)} onDone={() => { setOpen(false); q.refetch(); }} />}
+      {editing && <FinancialAccountForm account={editing} onClose={() => setEditing(null)} onSaved={(msg) => { setEditing(null); q.refetch(); toast(msg); }} />}
     </Card>
+  );
+}
+
+const FA_KINDS: [string, string][] = [["SAFE", "Safe (cash)"], ["PETTY_CASH", "Petty cash"], ["BANK", "Bank account"], ["MOBILE_MONEY", "Mobile money wallet"], ["CLEARING", "Clearing account (card / provider)"]];
+
+function FinancialAccountForm({ account, onClose, onSaved }: { account: any; onClose: () => void; onSaved: (msg: string) => void }) {
+  const { me } = useSession();
+  const isNew = !account.id;
+  const [f, setF] = useState({ name: account.name ?? "", kind: account.kind ?? "BANK", code: account.code ?? "", branch_id: account.branch_id ?? "", provider: account.provider ?? "", active: account.active ?? true });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      if (isNew) await api("/financial-accounts", { body: { name: f.name, kind: f.kind, code: f.code || undefined, branch_id: f.branch_id || null, provider: f.provider || null } });
+      else await api(`/financial-accounts/${account.id}`, { method: "PATCH", body: { name: f.name, ...(account.kind !== "TILL" ? { branch_id: f.branch_id || null } : {}), provider: f.provider || null, active: f.active } });
+      onSaved(isNew ? `${f.name} added` : `${f.name} saved`);
+    } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete ${account.name}? Only accounts that were never used can be deleted.`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/financial-accounts/${account.id}`, { method: "DELETE" }); onSaved(`${account.name} deleted`); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={isNew ? "Add financial account" : `Edit ${account.name}`} footer={<>
+      {!isNew && <Button variant="ghost" className="mr-auto text-red-700" disabled={busy} onClick={remove}>Delete</Button>}
+      <Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={f.name.trim().length < 2} onClick={save}>{isNew ? "Add account" : "Save"}</Button>
+    </>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Name" required className="sm:col-span-2">{(id) => <Input id={id} value={f.name} placeholder="e.g. Afriland First Bank — current account" onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
+        <Field label="Type">{(id) => <Select id={id} value={f.kind} disabled={!isNew} onChange={(e) => setF({ ...f, kind: e.target.value })}>{(isNew ? FA_KINDS : [...FA_KINDS, ["TILL", "Till"] as [string, string]]).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select>}</Field>
+        <Field label="Code" hint={isNew ? "Optional — generated from the name" : undefined}>{(id, d) => <Input id={id} aria-describedby={d} value={f.code} disabled={!isNew} onChange={(e) => setF({ ...f, code: e.target.value })} />}</Field>
+        <Field label="Branch" hint="Leave empty for business-wide accounts (bank, wallet)">{(id, d) => <Select id={id} aria-describedby={d} value={f.branch_id} disabled={account.kind === "TILL"} onChange={(e) => setF({ ...f, branch_id: e.target.value })}><option value="">— All branches —</option>{me?.branches.map((b) => <option key={b.id} value={b.id}>{b.code} — {b.name}</option>)}</Select>}</Field>
+        {(f.kind === "MOBILE_MONEY" || f.kind === "CLEARING" || f.kind === "BANK") && <Field label="Provider" hint="e.g. MTN MoMo, Orange Money, bank name">{(id, d) => <Input id={id} aria-describedby={d} value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value })} />}</Field>}
+        {!isNew && <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (an account must be empty before it can be deactivated)</label>}
+        {isNew && <p className="text-xs text-slate-500 sm:col-span-2">A ledger account is created for it automatically in the chart of accounts (under Banks, Mobile money wallets, Cash or Clearing). Tills are added with their cash register in Administration.</p>}
+        <div className="sm:col-span-2"><ErrorText error={err} /></div>
+      </div>
+    </Modal>
   );
 }
 

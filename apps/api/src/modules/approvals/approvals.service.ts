@@ -94,7 +94,7 @@ export class ApprovalsService {
   /** Supervisor override at the POS: the approver signs in on the cashier's screen. */
   async decideWithCredentials(requester: AuthContext, id: string, email: string, password: string, note?: string) {
     const user = await this.prisma.client.user.findFirst({ where: { business_id: requester.businessId, email: email.toLowerCase(), status: "ACTIVE" } });
-    if (!user || !(await verify(user.password_hash, password))) throw new DomainError("INVALID_CREDENTIALS", "Approver credentials are invalid", 401);
+    if (!user || !(await verify(user.password_hash, password))) throw new DomainError("INVALID_APPROVER_CREDENTIALS", "Approver credentials are invalid", 400); // 400: must not sign out the cashier whose session is in use
     const session = await this.prisma.client.userSession.create({
       data: { user_id: user.id, refresh_token_hash: "supervisor-override", expires_at: new Date(Date.now() + 60_000), user_agent: "supervisor-override" },
     });

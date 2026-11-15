@@ -93,12 +93,18 @@ importers:
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
+      '@types/pg':
+        specifier: 8.15.6
+        version: 8.15.6
       '@types/supertest':
         specifier: ^7.2.1
         version: 7.2.1
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
+      pg:
+        specifier: 8.16.3
+        version: 8.16.3
       supertest:
         specifier: ^7.3.2
         version: 7.3.2
@@ -4845,13 +4851,13 @@ snapshots:
 
   '@types/pg@8.15.6':
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       pg-protocol: 1.16.1
       pg-types: 2.2.0
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 26.6.6
+      '@types/node': 22.20.5
       pg-protocol: 1.16.1
       pg-types: 2.2.0
 

@@ -13,9 +13,27 @@ html, body, #root { height: 100%; }
 :focus-visible { outline: 2px solid var(--color-brand-600); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 
+.print-only { display: none; }
+#print-root { display: none; }
+
 @media print {
-  body * { visibility: hidden; }
-  .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; left: 0; top: 0; width: 80mm; padding: 0; }
+  /* Printing through printElement(): only the copied receipt/report is shown. */
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block; }
+  #print-root.print-receipt { width: 80mm; }
+  #print-root.print-receipt .print-area { width: 80mm !important; margin: 0; padding: 0; }
+  #print-root.print-report { width: 100%; color: #000; }
+  #print-root .print-only { display: block !important; }
+  #print-root .no-print, #print-root button { display: none !important; }
+  #print-root .overflow-x-auto, #print-root .overflow-auto, #print-root .overflow-hidden { overflow: visible !important; }
+  #print-root table { width: 100%; font-size: 9.5pt; border-collapse: collapse; }
+  #print-root th, #print-root td { padding: 3px 6px !important; }
+  #print-root tr { break-inside: avoid; }
+  #print-root .shadow-sm, #print-root .shadow { box-shadow: none !important; }
+  /* Fallback (browser print without the Print button): receipt only when one is on screen. */
+  body:not(.printing):has(.print-area) * { visibility: hidden; }
+  body:not(.printing):has(.print-area) .print-area, body:not(.printing):has(.print-area) .print-area * { visibility: visible; }
+  body:not(.printing):has(.print-area) .print-area { position: absolute; left: 0; top: 0; width: 80mm; }
   .no-print { display: none !important; }
 }
+@page { margin: 10mm; }

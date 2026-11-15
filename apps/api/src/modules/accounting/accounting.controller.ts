@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
@@ -10,12 +10,18 @@ import { PrismaService } from "../../common/prisma.service";
 import { businessDate, SettingsService } from "../../common/settings.service";
 import { IsDecimalValue } from "../../common/validators";
 import { AccountingService } from "./accounting.service";
+import { ChartService } from "./chart.service";
 import { POSTING_KEYS } from "./posting.service";
 
 class JournalLineDto { @IsUUID() account_id: string; @IsOptional() @IsDecimalValue({ min: 0 }) debit?: string; @IsOptional() @IsDecimalValue({ min: 0 }) credit?: string; @IsOptional() @IsString() memo?: string }
 class ManualJournalDto { @IsDateString() entry_date: string; @IsString() @MinLength(5) description: string; @IsOptional() @IsUUID() branch_id?: string; @IsArray() @ArrayMinSize(2) @ValidateNested({ each: true }) @Type(() => JournalLineDto) lines: JournalLineDto[] }
 class ReasonDto { @IsString() @MinLength(3) reason: string }
-class AccountDto { @IsString() code: string; @IsString() @MinLength(2) name: string; @IsIn(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]) type: any; @IsOptional() @IsString() subtype?: string; @IsOptional() @IsBoolean() allow_manual?: boolean }
+class AccountDto { @IsString() @MinLength(1) code: string; @IsString() @MinLength(2) name: string; @IsOptional() @IsIn(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]) type?: any; @IsOptional() @IsUUID() parent_id?: string; @IsOptional() @IsString() subtype?: string; @IsOptional() @IsBoolean() allow_manual?: boolean; @IsOptional() @IsBoolean() is_postable?: boolean }
+class UpdateAccountDto {
+  @IsOptional() @IsString() @MinLength(1) code?: string; @IsOptional() @IsString() @MinLength(2) name?: string;
+  @IsOptional() @IsIn(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"]) type?: any; @IsOptional() @IsUUID() parent_id?: string | null;
+  @IsOptional() @IsBoolean() allow_manual?: boolean; @IsOptional() @IsBoolean() is_postable?: boolean; @IsOptional() @IsBoolean() active?: boolean;
+}
 class RuleDto { @IsUUID() account_id: string }
 class JournalQuery extends PageQuery { @IsOptional() @IsString() source_type?: string; @IsOptional() @IsString() from?: string; @IsOptional() @IsString() to?: string; @IsOptional() @IsUUID() account_id?: string }
 class DateQuery { @IsOptional() @IsDateString() as_of?: string }
@@ -25,18 +31,20 @@ class RangeQuery { @IsOptional() @IsDateString() from?: string; @IsOptional() @I
 @ApiBearerAuth()
 @Controller("accounting")
 export class AccountingController {
-  constructor(private svc: AccountingService, private prisma: PrismaService, private settings: SettingsService, private audit: AuditService) {}
+  constructor(private svc: AccountingService, private chartSvc: ChartService, private prisma: PrismaService, private settings: SettingsService, private audit: AuditService) {}
 
   private async today(a: AuthContext) { const b = await this.settings.business(a.businessId); return businessDate(new Date(), b.timezone); }
 
   @Get("accounts") @RequirePermissions("accounting.view") chart(@Auth() a: AuthContext) { return this.svc.chart(a); }
 
   @Post("accounts") @RequirePermissions("accounting.periods")
-  async createAccount(@Auth() a: AuthContext, @Body() dto: AccountDto) {
-    const acc = await this.prisma.client.account.create({ data: { business_id: a.businessId, code: dto.code, name: dto.name, type: dto.type, subtype: dto.subtype ?? null, allow_manual: dto.allow_manual ?? true } });
-    await this.audit.record(a, { action: "account.created", entityType: "account", entityId: acc.id, summary: `Account ${acc.code} ${acc.name} created` });
-    return acc;
-  }
+  createAccount(@Auth() a: AuthContext, @Body() dto: AccountDto) { return this.chartSvc.createAccount(a, dto); }
+
+  @Patch("accounts/:id") @RequirePermissions("accounting.periods")
+  updateAccount(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateAccountDto) { return this.chartSvc.updateAccount(a, id, dto); }
+
+  @Delete("accounts/:id") @RequirePermissions("accounting.periods")
+  deleteAccount(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) { return this.chartSvc.deleteAccount(a, id); }
 
   @Get("posting-rules") @RequirePermissions("accounting.view")
   async rules(@Auth() a: AuthContext) {
