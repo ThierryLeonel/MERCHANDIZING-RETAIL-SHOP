@@ -827,6 +827,8 @@ model SupplierInvoice {
   amount_paid      Decimal        @default(0) @db.Decimal(18, 2)
   notes            String?
   journal_entry_id String?        @db.Uuid
+  /// Set when the invoice records a supplier balance carried over at go-live (no goods lines).
+  opening_balance_id String?      @db.Uuid
   posted_at        DateTime?      @db.Timestamptz(6)
   posted_by_id     String?        @db.Uuid
   created_by_id    String         @db.Uuid
@@ -1992,4 +1994,60 @@ model SystemSecret {
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
   @@map("system_secrets")
+}
+
+/// Opening balances entered when starting to use the system (one journal per document).
+model OpeningBalance {
+  id               String         @id @default(uuid()) @db.Uuid
+  business_id      String         @db.Uuid
+  number           String         @db.VarChar(32)
+  as_of_date       DateTime       @db.Date
+  status           DocumentStatus @default(POSTED)
+  notes            String?
+  total_debit      Decimal        @default(0) @db.Decimal(18, 2)
+  equity_amount    Decimal        @default(0) @db.Decimal(18, 2)
+  journal_entry_id String?        @db.Uuid
+  created_by_id    String         @db.Uuid
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  voided_at        DateTime?      @db.Timestamptz(6)
+  voided_by_id     String?        @db.Uuid
+  void_reason      String?
+
+  customer_items CustomerOpeningItem[]
+
+  @@unique([business_id, number])
+  @@map("opening_balances")
+}
+
+/// An amount a customer owed when the system started; settled by later payments.
+model CustomerOpeningItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  business_id        String   @db.Uuid
+  opening_balance_id String   @db.Uuid
+  customer_id        String   @db.Uuid
+  reference          String?
+  item_date          DateTime @db.Date
+  due_date           DateTime @db.Date
+  amount             Decimal  @db.Decimal(18, 2)
+  settled            Decimal  @default(0) @db.Decimal(18, 2)
+  voided             Boolean  @default(false)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  opening_balance OpeningBalance @relation(fields: [opening_balance_id], references: [id])
+  allocations     CustomerOpeningAllocation[]
+
+  @@index([customer_id])
+  @@map("customer_opening_items")
+}
+
+model CustomerOpeningAllocation {
+  id              String   @id @default(uuid()) @db.Uuid
+  payment_id      String   @db.Uuid
+  opening_item_id String   @db.Uuid
+  amount          Decimal  @db.Decimal(18, 2)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  opening_item CustomerOpeningItem @relation(fields: [opening_item_id], references: [id])
+
+  @@map("customer_opening_allocations")
 }

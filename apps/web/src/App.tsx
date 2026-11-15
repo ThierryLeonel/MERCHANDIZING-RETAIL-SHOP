@@ -14,6 +14,7 @@ const ProductForm = lazy(() => import("./pages/products/ProductForm"));
 const CatalogueSetup = lazy(() => import("./pages/products/CatalogueSetupPage"));
 const ImportPage = lazy(() => import("./pages/data/ImportPage"));
 const SalesPage = lazy(() => import("./pages/pos/SalesPage"));
+const OpeningBalances = lazy(() => import("./pages/accounting/OpeningBalancesPage"));
 const Inventory = lazy(() => import("./pages/inventory/InventoryPage"));
 const Purchasing = lazy(() => import("./pages/purchasing/PurchasingPage"));
 const PurchaseOrderDetail = lazy(() => import("./pages/purchasing/PurchaseOrderDetail"));
@@ -63,6 +64,7 @@ export function App() {
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/opening-balances" element={<OpeningBalances />} />
           <Route path="/account" element={<Account />} />
           <Route path="*" element={<div className="p-10 text-center text-slate-500">Page not found</div>} />
         </Routes>

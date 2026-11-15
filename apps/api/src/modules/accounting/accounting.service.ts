@@ -100,7 +100,9 @@ export class AccountingService implements OnModuleInit {
       LEFT JOIN (SELECT goods_receipt_line_id, SUM(receipt_value) rv FROM invoice_receipt_matches GROUP BY goods_receipt_line_id) m ON m.goods_receipt_line_id = gl.id
       WHERE g.business_id = ${auth.businessId}::uuid AND g.status = 'POSTED'`;
     const supplierOpen = await this.prisma.client.supplierInvoice.aggregate({ where: { business_id: auth.businessId, status: "POSTED" }, _sum: { total: true, amount_paid: true } });
-    const arOpen = await this.prisma.client.$queryRaw<{ v: Dec | null }[]>`SELECT SUM(credit_amount - credit_settled) AS v FROM sales WHERE business_id = ${auth.businessId}::uuid AND status = 'COMPLETED'`;
+    const arOpen = await this.prisma.client.$queryRaw<{ v: Dec | null }[]>`SELECT
+      COALESCE((SELECT SUM(credit_amount - credit_settled) FROM sales WHERE business_id = ${auth.businessId}::uuid AND status = 'COMPLETED'), 0)
+      + COALESCE((SELECT SUM(amount - settled) FROM customer_opening_items WHERE business_id = ${auth.businessId}::uuid AND NOT voided), 0) AS v`;
     const [glInv, glTransit, glGrni, glAp, glAr] = await Promise.all([bal("inventory"), bal("inventory_in_transit"), bal("grni"), bal("supplier_payable"), bal("customer_receivable")]);
     const check = (name: string, subledger: Dec, ledger: Dec, note: string) => ({ name, subledger, ledger, difference: subledger.minus(ledger), ok: subledger.equals(ledger), note });
     const openTills = await this.prisma.client.cashierSession.count({ where: { business_id: auth.businessId, status: "OPEN" } });
@@ -114,7 +116,7 @@ export class AccountingService implements OnModuleInit {
         check("Inventory in transit", D(inTransit[0]?.v ?? 0), glTransit, "Dispatched, unreceived transfer value vs GL in-transit account"),
         check("Goods received not invoiced", D(uninvoiced[0]?.v ?? 0).neg(), glGrni, "Uninvoiced receipt value vs GRNI (credit balance)"),
         check("Supplier payables", D(supplierOpen._sum.total ?? 0).minus(D(supplierOpen._sum.amount_paid ?? 0)).neg(), glAp, "Open supplier invoices vs payables control (credit balance)"),
-        check("Customer receivables", D(arOpen[0]?.v ?? 0), glAr, "Open credit sales vs receivables control"),
+        check("Customer receivables", D(arOpen[0]?.v ?? 0), glAr, "Open credit sales and opening balances vs receivables control"),
       ],
       tills: { open_sessions: openTills, till_gl_balance: D(tillBal._sum.debit ?? 0).minus(D(tillBal._sum.credit ?? 0)), note: "With no open sessions the till balance should be zero (counted cash is moved to the safe at close)" },
     };

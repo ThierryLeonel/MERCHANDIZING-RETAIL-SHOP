@@ -51,7 +51,7 @@ export default function CustomerDetail() {
         { key: "s", header: "", align: "right", render: (p: any) => p.voided_at ? <span title={p.void_reason ?? undefined}><Badge tone="red">Voided</Badge></span> : p.status !== "CONFIRMED" ? <Status value={p.status} /> : can("transactions.void") && <Button size="sm" variant="ghost" onClick={() => setVoidingPay(p)}>Void</Button> },
       ]} /></Card>}
       {tab === "open" && <Card padded={false}><DataTable rows={c.open_invoices} empty={<p className="p-6 text-center text-sm text-slate-500">No outstanding credit sales.</p>} columns={[
-        { key: "number", header: "Sale", render: (s: any) => <Link className="text-brand-700 hover:underline" to={`/sales/${s.id}`}>{s.number}</Link> },
+        { key: "number", header: "Sale", render: (s: any) => s.kind === "opening" ? <span className="font-medium">{s.number}</span> : <Link className="text-brand-700 hover:underline" to={`/sales/${s.id}`}>{s.number}</Link> },
         { key: "completed_at", header: "Date", render: (s: any) => dateTime(s.completed_at) }, { key: "due_date", header: "Due", render: (s: any) => date(s.due_date) },
         { key: "credit_amount", header: "On account", align: "right", render: (s: any) => money(s.credit_amount) }, { key: "outstanding", header: "Outstanding", align: "right", render: (s: any) => <strong>{money(s.outstanding)}</strong> },
       ]} /></Card>}
@@ -61,7 +61,7 @@ export default function CustomerDetail() {
         { key: "debit", header: "Debit", align: "right", render: (l: any) => (Number(l.debit) ? money(l.debit) : "") }, { key: "credit", header: "Credit", align: "right", render: (l: any) => (Number(l.credit) ? money(l.credit) : "") },
         { key: "balance", header: "Balance", align: "right", render: (l: any) => money(l.balance) },
       ]} /></Card></PrintSheet>}
-      {tab === "sales" && <Card padded={false}><DataTable rows={c.recent_sales} columns={[{ key: "number", header: "Sale", render: (s: any) => <Link className="text-brand-700 hover:underline" to={`/sales/${s.id}`}>{s.number}</Link> }, { key: "completed_at", header: "Date", render: (s: any) => dateTime(s.completed_at) }, { key: "total", header: "Total", align: "right", render: (s: any) => money(s.total) }]} /></Card>}
+      {tab === "sales" && <Card padded={false}><DataTable rows={c.recent_sales} columns={[{ key: "number", header: "Sale", render: (s: any) => s.kind === "opening" ? <span className="font-medium">{s.number}</span> : <Link className="text-brand-700 hover:underline" to={`/sales/${s.id}`}>{s.number}</Link> }, { key: "completed_at", header: "Date", render: (s: any) => dateTime(s.completed_at) }, { key: "total", header: "Total", align: "right", render: (s: any) => money(s.total) }]} /></Card>}
       {editing && <CustomerForm customer={c} onClose={() => setEditing(false)} onDone={() => { setEditing(false); refetch(); }} />}
       {paying && <PaymentForm customer={c} branchId={branchId!} onClose={() => setPaying(false)} onDone={() => { setPaying(false); refetch(); toast("Payment recorded"); }} />}
     </div>
@@ -80,7 +80,7 @@ function PaymentForm({ customer, branchId, onClose, onDone }: { customer: any; b
   };
   const submit = async () => {
     setBusy(true); setErr(null);
-    try { await api(`/customers/${customer.id}/payments`, { idempotent: true, body: { branch_id: branchId, financial_account_id: acc, amount, reference: ref || undefined, allocations: Object.entries(alloc).filter(([, v]) => Number(v) > 0).map(([sale_id, v]) => ({ sale_id, amount: v })) } }); onDone(); }
+    try { await api(`/customers/${customer.id}/payments`, { idempotent: true, body: { branch_id: branchId, financial_account_id: acc, amount, reference: ref || undefined, allocations: Object.entries(alloc).filter(([, v]) => Number(v) > 0).map(([id, v]) => (customer.open_invoices.find((i: any) => i.id === id)?.kind === "opening" ? { opening_item_id: id, amount: v } : { sale_id: id, amount: v })) } }); onDone(); }
     catch (e) { setErr(e); } finally { setBusy(false); }
   };
   return (

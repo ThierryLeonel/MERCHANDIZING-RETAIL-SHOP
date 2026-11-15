@@ -19,7 +19,7 @@ class CustomerDto {
   @IsOptional() @IsIn(["NONE", "ACTIVE", "ON_HOLD"]) credit_status?: "NONE" | "ACTIVE" | "ON_HOLD";
 }
 class UpdateCustomerDto extends CustomerDto { @IsOptional() @IsString() @MinLength(2) declare name: string; @IsOptional() @IsBoolean() active?: boolean }
-class AllocDto { @IsUUID() sale_id: string; @IsDecimalValue({ positive: true }) amount: string }
+class AllocDto { @IsOptional() @IsUUID() sale_id?: string; @IsOptional() @IsUUID() opening_item_id?: string; @IsDecimalValue({ positive: true }) amount: string }
 class CustomerPaymentDto {
   @IsUUID() branch_id: string; @IsUUID() financial_account_id: string; @IsDecimalValue({ positive: true }) amount: string; @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => AllocDto) allocations?: AllocDto[];

@@ -5203,6 +5203,120 @@
           "imports"
         ]
       }
+    },
+    "/api/v1/opening-balances/options": {
+      "get": {
+        "operationId": "OpeningBalanceController_options",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/{id}": {
+      "get": {
+        "operationId": "OpeningBalanceController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      }
+    },
+    "/api/v1/opening-balances": {
+      "post": {
+        "operationId": "OpeningBalanceController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpeningBalanceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      }
+    },
+    "/api/v1/opening-balances/{id}/void": {
+      "post": {
+        "operationId": "OpeningBalanceController_void",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounting"
+        ]
+      }
     }
   },
   "info": {
@@ -5475,6 +5589,10 @@
         "properties": {}
       },
       "ImportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OpeningBalanceDto": {
         "type": "object",
         "properties": {}
       }

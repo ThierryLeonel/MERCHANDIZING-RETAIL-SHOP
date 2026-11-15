@@ -35,6 +35,20 @@ These policies are implemented in code and verified by tests. Change them only w
 - Refund = the original line's net and tax amounts pro rata (the final unit takes the exact remainder). Returns outside the return window (setting) or above the refund threshold need approval.
 - Exchanges are recorded as a linked return followed by a new sale.
 
+## Opening balances (go-live)
+Screen **Opening balances** (permission `accounting.opening_balances`, granted to Owner and System Administrator). One document (`OB-…`) posts one journal (source `opening_balance`) dated the chosen as-of date (not in the future, in an open period):
+
+| Section | Posting |
+|---|---|
+| Cash / bank / mobile money (per financial account; negative = overdraft) | Dr (or Cr) the account's ledger account, tagged with the financial account. Tills are excluded — they start empty. |
+| Customer owes | Dr Customer receivables (tagged with the customer) + an **open item** (`customer_opening_items`) with a due date; payments can be allocated to it, ageing and statements include it. |
+| Customer store credit | Cr Customer deposits (usable as store credit at the POS). |
+| Supplier owed | Cr Supplier payables (tagged) + an **opening supplier invoice** (no goods lines) that supplier payments allocate to. |
+| Other accounts (loans, equipment, capital, other receivables) | Dr or Cr any postable, active account that is not a system/control account or a cash/bank account. |
+| Balancing figure | Opening balance equity (account 1190) for the difference. |
+
+Opening **stock** is entered separately per product (Import → Opening stock, or the products import): Dr Inventory / Cr Opening balance equity. The receivable and payable reconciliation checks include the opening items. A document can be reversed (mirror journal; open items voided; opening invoices reversed) only while none of its customer or supplier amounts has been paid. Several documents are allowed (e.g. for a forgotten balance); the screen warns when one already exists.
+
 ## Voids and corrections (no deletion of posted transactions)
 Posted transactions are never deleted or edited in place: the stock ledger, journals and audit log are append-only (enforced by database triggers), and completed sales are immutable. An administrator holding `transactions.void` (granted to the Owner role by default) can instead **void** a transaction; the original stays on record, marked voided, with who/when/why, and a reversing entry is posted **dated the day of the void** (so closed periods are never changed):
 

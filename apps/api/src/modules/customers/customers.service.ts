@@ -51,15 +51,18 @@ export class CustomersService {
     if (!c) throw notFound("Customer");
     const bal = await this.balances(this.prisma.client as unknown as Tx, auth.businessId, id);
     const open = await this.prisma.client.sale.findMany({ where: { customer_id: id, status: "COMPLETED", credit_amount: { gt: 0 } }, orderBy: { completed_at: "asc" }, select: { id: true, number: true, completed_at: true, due_date: true, total: true, credit_amount: true, credit_settled: true } });
+    // balances carried over when the system started (settled by payments like credit sales)
+    const openingItems = await this.prisma.client.customerOpeningItem.findMany({ where: { customer_id: id, voided: false }, orderBy: { item_date: "asc" } });
+    const openingOpen = openingItems.filter((o) => D(o.amount).gt(o.settled)).map((o) => ({ id: o.id, kind: "opening" as const, number: `Opening balance${o.reference ? ` — ${o.reference}` : ""}`, completed_at: o.item_date, due_date: o.due_date, total: o.amount, credit_amount: o.amount, credit_settled: o.settled, outstanding: D(o.amount).minus(o.settled) }));
     const recent = await this.prisma.client.sale.findMany({ where: { customer_id: id, status: "COMPLETED" }, orderBy: { completed_at: "desc" }, take: 20, select: { id: true, number: true, completed_at: true, total: true } });
-    return { ...c, ...bal, available_credit: D(c.credit_limit).minus(bal.receivable), open_invoices: open.filter((s) => D(s.credit_amount).gt(s.credit_settled)).map((s) => ({ ...s, outstanding: D(s.credit_amount).minus(s.credit_settled) })), recent_sales: recent };
+    return { ...c, ...bal, available_credit: D(c.credit_limit).minus(bal.receivable), open_invoices: [...openingOpen, ...open.filter((s) => D(s.credit_amount).gt(s.credit_settled)).map((s) => ({ ...s, kind: "sale" as const, outstanding: D(s.credit_amount).minus(s.credit_settled) }))], recent_sales: recent };
   }
 
   /**
    * Account payment: allocations settle credit sales (Cr Receivable); any
    * unallocated amount is a customer deposit (Cr Customer deposits) — never revenue.
    */
-  async receivePayment(auth: AuthContext, customerId: string, input: { branch_id: string; financial_account_id: string; amount: string | number; reference?: string; allocations?: { sale_id: string; amount: string | number }[] }) {
+  async receivePayment(auth: AuthContext, customerId: string, input: { branch_id: string; financial_account_id: string; amount: string | number; reference?: string; allocations?: { sale_id?: string; opening_item_id?: string; amount: string | number }[] }) {
     assertCan(auth, "customers.credit");
     assertBranch(auth, input.branch_id);
     const b = await this.settings.business(auth.businessId);
@@ -75,6 +78,19 @@ export class CustomersService {
       const payment = await tx.payment.create({ data: { business_id: auth.businessId, branch_id: input.branch_id, customer_id: c.id, method: fa.kind === "BANK" ? "BANK_TRANSFER" : fa.kind === "MOBILE_MONEY" ? "MOBILE_MONEY" : "CASH", status: "CONFIRMED", amount, financial_account_id: fa.id, provider_reference: input.reference ?? null, confirmation_mode: "MANUAL", confirmed_by_id: auth.userId, confirmed_at: new Date(), created_by_id: auth.userId } });
       let allocated = ZERO;
       for (const a of input.allocations ?? []) {
+        if (a.opening_item_id) {
+          await tx.$queryRaw`SELECT id FROM customer_opening_items WHERE id = ${a.opening_item_id}::uuid FOR UPDATE`;
+          const o = await tx.customerOpeningItem.findFirst({ where: { id: a.opening_item_id, customer_id: c.id, voided: false } });
+          if (!o) throw notFound("Opening balance item");
+          const amt = money(a.amount, dec);
+          const outstanding = D(o.amount).minus(o.settled);
+          if (!amt.gt(0) || amt.greaterThan(outstanding)) throw invalid("OVER_ALLOCATION", `Allocation exceeds the outstanding opening balance ${outstanding}`);
+          await tx.customerOpeningItem.update({ where: { id: o.id }, data: { settled: D(o.settled).plus(amt) } });
+          await tx.customerOpeningAllocation.create({ data: { payment_id: payment.id, opening_item_id: o.id, amount: amt } });
+          allocated = allocated.plus(amt);
+          continue;
+        }
+        if (!a.sale_id) throw invalid("ALLOCATION_TARGET", "Each allocation needs a sale or an opening balance");
         await tx.$queryRaw`SELECT id FROM sales WHERE id = ${a.sale_id}::uuid FOR UPDATE`;
         const s = await tx.sale.findFirst({ where: { id: a.sale_id, customer_id: c.id, status: "COMPLETED" } });
         if (!s) throw notFound("Credit sale");
@@ -120,7 +136,8 @@ export class CustomersService {
       const journal = await tx.journalEntry.findFirst({ where: { business_id: auth.businessId, source_type: "customer_payment", source_id: p.id, reversal_of_id: null } });
       if (!journal) throw invalid("NO_JOURNAL", "The payment's journal entry was not found");
       const allocations = await tx.salePaymentAllocation.findMany({ where: { payment_id: p.id } });
-      const allocated = sum(allocations, (a) => D(a.amount));
+      const openingAllocs = await tx.customerOpeningAllocation.findMany({ where: { payment_id: p.id } });
+      const allocated = sum(allocations, (a) => D(a.amount)).plus(sum(openingAllocs, (a) => D(a.amount)));
       const unapplied = D(p.amount).minus(allocated);
       if (unapplied.gt(0)) {
         const { deposits } = await this.balances(tx, auth.businessId, p.customer_id!);
@@ -132,6 +149,10 @@ export class CustomersService {
         const settled = D(sale.credit_settled).minus(a.amount);
         if (settled.lt(0)) throw invalid("ALLOCATION_MISMATCH", `${sale.number}: allocation no longer matches the sale`);
         await tx.sale.update({ where: { id: sale.id }, data: { credit_settled: settled } });
+      }
+      for (const a of openingAllocs) {
+        const o = await tx.customerOpeningItem.findUniqueOrThrow({ where: { id: a.opening_item_id } });
+        await tx.customerOpeningItem.update({ where: { id: o.id }, data: { settled: D(o.settled).minus(a.amount) } });
       }
       await this.posting.reverse(tx, journal.id, { date: businessDate(new Date(), b.timezone), reason: `Void ${journal.source_number ?? "payment"}: ${reason.trim()}`, userId: auth.userId, currencyDecimals: b.currency_decimals });
       await tx.payment.update({ where: { id: p.id }, data: { status: "CANCELLED", voided_at: new Date(), voided_by_id: auth.userId, void_reason: reason.trim() } });
@@ -151,11 +172,12 @@ export class CustomersService {
   async remove(auth: AuthContext, id: string) {
     const c = await this.prisma.client.customer.findFirst({ where: { id, business_id: auth.businessId } });
     if (!c) throw notFound("Customer");
-    const [sales, payments, held, journal] = await Promise.all([
+    const [sales, payments, held, journal, opening] = await Promise.all([
       this.prisma.client.sale.count({ where: { customer_id: id } }), this.prisma.client.payment.count({ where: { customer_id: id } }),
       this.prisma.client.heldCart.count({ where: { customer_id: id } }), this.prisma.client.journalLine.count({ where: { customer_id: id } }),
+      this.prisma.client.customerOpeningItem.count({ where: { customer_id: id } }),
     ]);
-    if (sales + payments + held + journal > 0) throw invalid("CUSTOMER_IN_USE", `${c.name} has sales or payments on record and cannot be deleted — mark the customer inactive instead`);
+    if (sales + payments + held + journal + opening > 0) throw invalid("CUSTOMER_IN_USE", `${c.name} has sales or payments on record and cannot be deleted — mark the customer inactive instead`);
     await this.prisma.client.customer.delete({ where: { id } });
     await this.audit.record(auth, { action: "customer.deleted", entityType: "customer", entityId: id, summary: `Customer "${c.name}" deleted` });
     return { id, deleted: true };
@@ -191,8 +213,13 @@ export class CustomersService {
         SUM(CASE WHEN ${today}::date - s.due_date BETWEEN 61 AND 90 THEN s.credit_amount - s.credit_settled ELSE 0 END) AS d61_90,
         SUM(CASE WHEN ${today}::date - s.due_date > 90 THEN s.credit_amount - s.credit_settled ELSE 0 END) AS d90_plus,
         SUM(s.credit_amount - s.credit_settled) AS total
-      FROM sales s JOIN customers c ON c.id = s.customer_id
-      WHERE s.business_id = ${auth.businessId}::uuid AND s.status = 'COMPLETED' AND s.credit_amount > s.credit_settled
+      FROM (
+        SELECT customer_id, due_date, credit_amount, credit_settled FROM sales
+        WHERE business_id = ${auth.businessId}::uuid AND status = 'COMPLETED' AND credit_amount > credit_settled
+        UNION ALL
+        SELECT customer_id, due_date, amount, settled FROM customer_opening_items
+        WHERE business_id = ${auth.businessId}::uuid AND NOT voided AND amount > settled
+      ) s JOIN customers c ON c.id = s.customer_id
       GROUP BY c.id, c.code, c.name ORDER BY total DESC`;
     return { as_of: today, rows };
   }

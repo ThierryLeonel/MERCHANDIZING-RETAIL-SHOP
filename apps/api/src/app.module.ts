@@ -1,3 +1,5 @@
+import { OpeningBalanceController } from "./modules/accounting/opening-balance.controller";
+import { OpeningBalanceService } from "./modules/accounting/opening-balance.service";
 import { MaintenanceService } from "./modules/admin/maintenance.service";
 import { ChartService } from "./modules/accounting/chart.service";
 import { DataController } from "./modules/data/data.controller";
@@ -46,7 +48,7 @@ import { SystemController } from "./modules/system/system.controller";
 export const SERVICES = [
   PrismaService, AuditService, SequenceService, SettingsService, PostingService, ApprovalsService, StockLedgerService, PricingService,
   AuthService, CatalogueService, PurchasingService, InventoryService, SalesService, FinanceService, CustomersService, AccountingService,
-  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService,
+  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService, OpeningBalanceService,
 ];
 
 @Module({
@@ -56,7 +58,7 @@ export const SERVICES = [
   ],
   controllers: [
     AuthController, CatalogueController, PurchasingController, InventoryController, SalesController, FinanceController, CustomersController,
-    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController, DataController,
+    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController, DataController, OpeningBalanceController,
   ],
   providers: [
     ...SERVICES,

@@ -1,3 +1,4 @@
+import { OpeningBalanceService } from "../src/modules/accounting/opening-balance.service";
 import { ChartService } from "../src/modules/accounting/chart.service";
 import { MaintenanceService } from "../src/modules/admin/maintenance.service";
 import { ImportService } from "../src/modules/data/import.service";
@@ -64,12 +65,13 @@ export async function makeWorld(opts: { pricesIncludeTax?: boolean } = {}) {
   const cashierS2 = await mk("cashiers2", ["CASHIER"], [s2.id]);
   const keeper = await mk("keeper", ["STOREKEEPER"], [s1.id, s2.id]);
   const accountant = await mk("accountant", ["ACCOUNTANT"], [], true);
+  const sysadmin = await mk("sysadmin", ["SYSTEM_ADMIN"], [], true);
   const units = Object.fromEntries((await db.unit.findMany({ where: { business_id: B } })).map((u) => [u.code, u.id]));
   const supplier = await db.supplier.create({ data: { business_id: B, code: "SUP", name: "Supplier" } });
   const svc = {
     catalogue: app.get(CatalogueService), purchasing: app.get(PurchasingService), inventory: app.get(InventoryService), sales: app.get(SalesService),
     finance: app.get(FinanceService), customers: app.get(CustomersService), accounting: app.get(AccountingService), approvals: app.get(ApprovalsService),
-    pricing: app.get(PricingService), posting: app.get(PostingService), imports: app.get(ImportService), chart: app.get(ChartService), maintenance: app.get(MaintenanceService),
+    pricing: app.get(PricingService), posting: app.get(PostingService), imports: app.get(ImportService), chart: app.get(ChartService), maintenance: app.get(MaintenanceService), opening: app.get(OpeningBalanceService),
   };
   const loc = async (branchId: string, code: string) => db.location.findFirstOrThrow({ where: { branch_id: branchId, code } });
 
@@ -114,6 +116,6 @@ export async function makeWorld(opts: { pricesIncludeTax?: boolean } = {}) {
     const s = await db.stockBalance.aggregate({ where: { variant_id: variantId, ...(locationId ? { location_id: locationId } : {}) }, _sum: { qty_on_hand: true, qty_reserved: true } });
     return { onHand: D(s._sum.qty_on_hand ?? 0), reserved: D(s._sum.qty_reserved ?? 0) };
   };
-  return { app, prisma, db, business, B, s1, s2, regs, owner, manager, cashier, cashier2, cashierS2, keeper, accountant, units, supplier, svc, loc, product, stock, session, cashSale, glBalance, onHand, actor };
+  return { app, prisma, db, business, B, s1, s2, regs, owner, manager, cashier, cashier2, cashierS2, keeper, accountant, sysadmin, units, supplier, svc, loc, product, stock, session, cashSale, glBalance, onHand, actor };
 }
 export type World = Awaited<ReturnType<typeof makeWorld>>;
