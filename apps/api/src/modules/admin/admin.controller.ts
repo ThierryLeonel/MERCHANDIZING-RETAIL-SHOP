@@ -1,7 +1,7 @@
 import { createGzip } from "node:zlib";
 import type { Response } from "express";
 import { MaintenanceService } from "./maintenance.service";
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ArrayUnique, IsArray, IsBoolean, IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from "class-validator";
 import { toCsv } from "../reports/reports.service";
@@ -30,7 +30,8 @@ class SettingsDto {
 }
 class BranchDto { @IsString() @MinLength(2) @MaxLength(16) code: string; @IsString() @MinLength(2) name: string; @IsIn(["STORE", "WAREHOUSE"]) kind: "STORE" | "WAREHOUSE"; @IsOptional() @IsString() phone?: string; @IsOptional() @IsString() address?: string }
 class LocationDto { @IsUUID() branch_id: string; @IsString() @MinLength(2) code: string; @IsString() name: string; @IsIn(["SALES_FLOOR", "STOREROOM", "QUARANTINE", "DAMAGED"]) kind: any }
-class RegisterDto { @IsUUID() branch_id: string; @IsOptional() @IsUUID() location_id?: string; @IsString() @MinLength(2) @MaxLength(16) code: string; @IsString() name: string }
+class RegisterDto { @IsUUID() branch_id: string; @IsOptional() @IsUUID() location_id?: string; @IsString() @MinLength(2) @MaxLength(16) code: string; @IsString() @MinLength(2) name: string }
+class UpdateRegisterDto { @IsOptional() @IsString() @MinLength(2) name?: string; @IsOptional() @IsString() @MinLength(2) @MaxLength(16) code?: string; @IsOptional() @IsUUID() location_id?: string; @IsOptional() @IsBoolean() active?: boolean }
 class UserDto {
   @IsEmail() email: string; @IsString() @MinLength(2) full_name: string; @IsOptional() @IsString() phone?: string;
   @IsString() @MinLength(10) password: string; @IsArray() @IsString({ each: true }) roles: string[];
@@ -138,7 +139,16 @@ export class AdminController {
   }
 
   @Get("registers") @RequirePermissions("admin.settings")
-  registers(@Auth() a: AuthContext) { return this.prisma.client.cashRegister.findMany({ where: { business_id: a.businessId }, orderBy: { code: "asc" } }); }
+  async registers(@Auth() a: AuthContext) {
+    const regs = await this.prisma.client.cashRegister.findMany({ where: { business_id: a.businessId }, orderBy: [{ branch_id: "asc" }, { code: "asc" }] });
+    const ids = regs.map((r) => r.id);
+    const [open, counts, locations] = await Promise.all([
+      this.prisma.client.cashierSession.findMany({ where: { register_id: { in: ids }, status: { in: ["OPEN", "CLOSING"] } }, select: { register_id: true, number: true } }),
+      this.prisma.client.cashierSession.groupBy({ by: ["register_id"], where: { register_id: { in: ids } }, _count: { _all: true } }),
+      this.prisma.client.location.findMany({ where: { id: { in: regs.map((r) => r.location_id) } }, select: { id: true, code: true, name: true } }),
+    ]);
+    return regs.map((r) => ({ ...r, open_session: open.find((o) => o.register_id === r.id)?.number ?? null, session_count: counts.find((c) => c.register_id === r.id)?._count._all ?? 0, location: locations.find((l) => l.id === r.location_id) ?? null }));
+  }
 
   /** Creates a register with its own till financial account and GL sub-account. */
   @Post("registers") @RequirePermissions("admin.settings")
@@ -146,11 +156,81 @@ export class AdminController {
     return this.prisma.tx(async (tx) => {
       const br = await tx.branch.findFirst({ where: { id: dto.branch_id, business_id: a.businessId } });
       if (!br) throw notFound("Branch");
-      const reg = await createRegister(tx, a.businessId, br.id, dto.code.toUpperCase(), dto.name);
+      const code = dto.code.trim().toUpperCase();
+      if (await tx.cashRegister.findFirst({ where: { branch_id: br.id, code } })) throw invalid("DUPLICATE_CODE", `${br.name} already has a register with code ${code}`);
+      if (dto.location_id && !(await tx.location.findFirst({ where: { id: dto.location_id, branch_id: br.id, is_sellable: true } }))) throw invalid("INVALID_LOCATION", "Choose a sellable location of this branch");
+      const reg = await createRegister(tx, a.businessId, br.id, code, dto.name.trim());
       if (dto.location_id && dto.location_id !== reg.location_id) await tx.cashRegister.update({ where: { id: reg.id }, data: { location_id: dto.location_id } });
       await this.audit.record(a, { action: "register.created", entityType: "cash_register", entityId: reg.id, summary: `Register ${reg.code} created at ${br.code}`, branchId: br.id }, tx);
       return reg;
     });
+  }
+
+  /** Rename, re-code (only while unused), move to another sellable location of the branch, activate/deactivate. */
+  @Patch("registers/:id") @RequirePermissions("admin.settings")
+  async updateRegister(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateRegisterDto) {
+    const db = this.prisma.client;
+    const reg = await db.cashRegister.findFirst({ where: { id, business_id: a.businessId } });
+    if (!reg) throw notFound("Register");
+    const openSession = await db.cashierSession.findFirst({ where: { register_id: id, status: { in: ["OPEN", "CLOSING"] } } });
+    const data: { name?: string; code?: string; location_id?: string; active?: boolean } = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.code !== undefined && dto.code.trim().toUpperCase() !== reg.code) {
+      const code = dto.code.trim().toUpperCase();
+      if (await db.cashierSession.count({ where: { register_id: id } })) throw invalid("REGISTER_IN_USE", "This register has cashier sessions — its code cannot change (rename it instead)");
+      if (await db.cashRegister.findFirst({ where: { branch_id: reg.branch_id, code, id: { not: id } } })) throw invalid("DUPLICATE_CODE", `A register with code ${code} already exists at this branch`);
+      data.code = code;
+    }
+    if (dto.location_id !== undefined && dto.location_id !== reg.location_id) {
+      if (openSession) throw invalid("SESSION_OPEN", "Close the open cashier session before moving the register");
+      if (!(await db.location.findFirst({ where: { id: dto.location_id, branch_id: reg.branch_id, is_sellable: true } }))) throw invalid("INVALID_LOCATION", "Choose a sellable location of this branch");
+      data.location_id = dto.location_id;
+    }
+    if (dto.active === false && reg.active && openSession) throw invalid("SESSION_OPEN", `Close the open cashier session (${openSession.number}) before deactivating this register`);
+    if (dto.active !== undefined) data.active = dto.active;
+    await this.prisma.tx(async (tx) => {
+      await tx.cashRegister.update({ where: { id }, data });
+      if (data.name || data.active !== undefined) {
+        // keep the till account in step: same name, active with its register (a till must be empty to be switched off)
+        const br = await tx.branch.findUniqueOrThrow({ where: { id: reg.branch_id } });
+        const fa = await tx.financialAccount.findUniqueOrThrow({ where: { id: reg.till_account_id } });
+        if (data.active === false) {
+          const bal = await tx.journalLine.aggregate({ where: { account_id: fa.gl_account_id }, _sum: { debit: true, credit: true } });
+          if (!D(bal._sum.debit ?? 0).equals(D(bal._sum.credit ?? 0))) throw invalid("TILL_NOT_EMPTY", "The till still holds money — close its last session to the safe first");
+        }
+        await tx.financialAccount.update({ where: { id: fa.id }, data: { ...(data.name ? { name: `Till ${br.code} ${data.name}` } : {}), ...(data.active !== undefined ? { active: data.active } : {}) } });
+        if (data.name) await tx.account.update({ where: { id: fa.gl_account_id }, data: { name: `Till ${br.code} ${data.name}` } });
+      }
+      await this.audit.record(a, { action: "register.updated", entityType: "cash_register", entityId: id, summary: `Register ${reg.code} updated`, branchId: reg.branch_id, data: { before: { name: reg.name, code: reg.code, location_id: reg.location_id, active: reg.active }, after: data } }, tx);
+    });
+    return db.cashRegister.findUniqueOrThrow({ where: { id } });
+  }
+
+  /** Deletes a register that never had a cashier session or sale (with its till account and ledger account). */
+  @Delete("registers/:id") @RequirePermissions("admin.settings")
+  async deleteRegister(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) {
+    const db = this.prisma.client;
+    const reg = await db.cashRegister.findFirst({ where: { id, business_id: a.businessId } });
+    if (!reg) throw notFound("Register");
+    const fa = await db.financialAccount.findUniqueOrThrow({ where: { id: reg.till_account_id } });
+    const used = (await Promise.all([
+      db.cashierSession.count({ where: { register_id: id } }), db.sale.count({ where: { register_id: id } }), db.heldCart.count({ where: { register_id: id } }),
+      db.journalLine.count({ where: { OR: [{ account_id: fa.gl_account_id }, { financial_account_id: fa.id }] } }), db.payment.count({ where: { financial_account_id: fa.id } }),
+    ])).reduce((x, y) => x + y, 0);
+    if (used) throw invalid("REGISTER_IN_USE", `${reg.code} has cashier sessions or sales and cannot be deleted — deactivate it instead`);
+    try {
+      await this.prisma.tx(async (tx) => {
+        await tx.cashRegister.delete({ where: { id } });
+        await tx.financialAccount.delete({ where: { id: fa.id } });
+        const glUsed = (await tx.financialAccount.count({ where: { gl_account_id: fa.gl_account_id } })) + (await tx.postingRule.count({ where: { account_id: fa.gl_account_id } }));
+        if (!glUsed) await tx.account.delete({ where: { id: fa.gl_account_id } });
+        await this.audit.record(a, { action: "register.deleted", entityType: "cash_register", entityId: id, summary: `Register ${reg.code} "${reg.name}" deleted`, branchId: reg.branch_id }, tx);
+      });
+    } catch (e: any) {
+      if (e?.code === "P2003" || /foreign key/i.test(String(e?.message))) throw invalid("REGISTER_IN_USE", `${reg.code} is referenced by other records — deactivate it instead`);
+      throw e;
+    }
+    return { id, deleted: true };
   }
 
   @Get("users") @RequirePermissions("admin.users")

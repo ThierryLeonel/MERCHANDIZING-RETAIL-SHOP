@@ -69,27 +69,72 @@ function Settings() {
   );
 }
 
+function RegisterForm({ register, branch, onClose, onSaved }: { register: any; branch: any; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [f, setF] = useState({ code: register.code, name: register.name, location_id: register.location_id, active: register.active });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const used = register.session_count > 0;
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try { await api(`/admin/registers/${register.id}`, { method: "PATCH", body: { name: f.name, ...(used ? {} : { code: f.code }), location_id: f.location_id, active: f.active } }); onSaved(`Register ${f.code} saved`); }
+    catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!window.confirm(`Delete register ${register.code}? Only registers that never had a cashier session can be deleted.`)) return;
+    setBusy(true); setErr(null);
+    try { await api(`/admin/registers/${register.id}`, { method: "DELETE" }); onSaved(`Register ${register.code} deleted`); } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={`Edit register ${register.code}${branch ? ` — ${branch.name}` : ""}`} footer={<>
+      <Button variant="ghost" className="mr-auto text-red-700" disabled={busy} onClick={remove}>Delete</Button>
+      <Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={f.name.trim().length < 2 || f.code.trim().length < 2} onClick={save}>Save</Button>
+    </>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Code" hint={used ? "Has sessions — the code is fixed" : "Shown on receipts and sessions"}>{(id, d) => <Input id={id} aria-describedby={d} value={f.code} disabled={used} maxLength={16} onChange={(e) => setF({ ...f, code: e.target.value })} />}</Field>
+        <Field label="Name">{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
+        <Field label="Sells stock from" className="sm:col-span-2">{(id) => <Select id={id} value={f.location_id} onChange={(e) => setF({ ...f, location_id: e.target.value })}>{branch?.locations.filter((l: any) => l.is_sellable).map((l: any) => <option key={l.id} value={l.id}>{l.code} — {l.name}</option>)}</Select>}</Field>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (inactive registers cannot open a session; close any open session and empty the till first)</label>
+        {register.open_session && <p className="text-xs text-amber-700 sm:col-span-2">Session {register.open_session} is open on this register.</p>}
+        <p className="text-xs text-slate-500 sm:col-span-2">Registers with cashier sessions or sales cannot be deleted (their history is kept) — deactivate them instead. Deleting an unused register also removes its till account.</p>
+        <div className="sm:col-span-2"><ErrorText error={err} /></div>
+      </div>
+    </Modal>
+  );
+}
+
 function Branches() {
   const toast = useToast();
   const q = useApi<any[]>("/admin/branches");
   const regs = useApi<any[]>("/admin/registers");
   const [open, setOpen] = useState<"branch" | "register" | null>(null);
+  const [editReg, setEditReg] = useState<any>(null);
   const [f, setF] = useState<any>({ code: "", name: "", kind: "STORE", branch_id: "" });
   const [err, setErr] = useState<unknown>(null);
   const save = async () => {
     setErr(null);
-    try { await api(open === "branch" ? "/admin/branches" : "/admin/registers", { body: open === "branch" ? { code: f.code, name: f.name, kind: f.kind } : { branch_id: f.branch_id, code: f.code, name: f.name } }); toast("Saved"); setOpen(null); q.refetch(); regs.refetch(); }
+    try { await api(open === "branch" ? "/admin/branches" : "/admin/registers", { body: open === "branch" ? { code: f.code, name: f.name, kind: f.kind } : { branch_id: f.branch_id, code: f.code, name: f.name } }); toast("Saved"); setOpen(null); setF({ code: "", name: "", kind: "STORE", branch_id: "" }); q.refetch(); regs.refetch(); }
     catch (e) { setErr(e); }
   };
   return (
     <div className="space-y-5">
-      <Card title="Branches and locations" padded={false} actions={<><Button size="sm" variant="secondary" onClick={() => setOpen("register")}>New register</Button><Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen("branch")}>New branch</Button></>}>
+      <Card title="Branches and locations" padded={false} actions={<Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen("branch")}>New branch</Button>}>
         <DataTable rows={q.data} loading={q.isLoading} columns={[
           { key: "code", header: "Code" }, { key: "name", header: "Name" }, { key: "kind", header: "Type", render: (b) => <Badge>{humanize(b.kind)}</Badge> },
           { key: "locations", header: "Locations", render: (b) => <div className="flex flex-wrap gap-1">{b.locations.map((l: any) => <Badge key={l.id} tone={l.is_sellable ? "green" : "amber"}>{l.code}{l.is_default ? " (default)" : ""}</Badge>)}</div> },
           { key: "registers", header: "Registers", render: (b) => regs.data?.filter((r) => r.branch_id === b.id).map((r) => r.code).join(", ") || "—" },
         ]} />
       </Card>
+      <Card title="Cash registers" padded={false} actions={<Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen("register")}>New register</Button>}>
+        <DataTable rows={regs.data} loading={regs.isLoading} error={regs.error} empty="No registers yet." columns={[
+          { key: "branch", header: "Branch", render: (r) => q.data?.find((b) => b.id === r.branch_id)?.name ?? "" },
+          { key: "code", header: "Code", render: (r) => <span className="font-mono">{r.code}</span> },
+          { key: "name", header: "Name", render: (r) => <span className={r.active ? "font-medium" : "text-slate-400 line-through"}>{r.name}</span> },
+          { key: "location", header: "Stock location", render: (r) => r.location?.code ?? "—" },
+          { key: "status", header: "Status", render: (r) => <div className="flex gap-1">{r.active ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge>}{r.open_session && <Badge tone="blue">Session {r.open_session} open</Badge>}</div> },
+          { key: "used", header: "Sessions", align: "right", render: (r) => r.session_count },
+          { key: "e", header: "", align: "right", render: (r) => <Button size="sm" variant="ghost" onClick={() => setEditReg(r)}>Edit</Button> },
+        ]} />
+      </Card>
+      {editReg && <RegisterForm register={editReg} branch={q.data?.find((b) => b.id === editReg.branch_id)} onClose={() => setEditReg(null)} onSaved={(m) => { setEditReg(null); regs.refetch(); toast(m); }} />}
       <Modal open={!!open} onClose={() => setOpen(null)} title={open === "branch" ? "New branch" : "New register"} footer={<><Button variant="secondary" onClick={() => setOpen(null)}>Cancel</Button><Button onClick={save}>Create</Button></>}>
         <div className="grid gap-3 sm:grid-cols-2">
           {open === "register" && <Field label="Branch" className="sm:col-span-2">{(id) => <Select id={id} value={f.branch_id} onChange={(e) => setF({ ...f, branch_id: e.target.value })}><option value="">Select…</option>{q.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}</Field>}

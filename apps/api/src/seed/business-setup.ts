@@ -154,8 +154,13 @@ export async function createBranchWithDefaults(tx: Tx, businessId: string, input
 export async function createRegister(tx: Tx, businessId: string, branchId: string, code: string, name: string) {
   const br = await tx.branch.findUniqueOrThrow({ where: { id: branchId } });
   const loc = await tx.location.findFirstOrThrow({ where: { branch_id: branchId, is_default: true } });
-  const n = await tx.account.count({ where: { business_id: businessId, code: { startsWith: "571" }, is_postable: true } });
-  const fa = await addFinancialAccount(tx, businessId, branchId, { code: `TILL-${br.code}-${code}`, name: `Till ${br.code} ${name}`, kind: "TILL", glCode: `571${String(n + 1).padStart(2, "0")}`, glParent: "5710" });
+  // first free till ledger code 57101, 57102… (a count would collide after a register is deleted)
+  const used = new Set((await tx.account.findMany({ where: { business_id: businessId, code: { startsWith: "571" } }, select: { code: true } })).map((a) => a.code));
+  let n = 1;
+  while (used.has(`571${String(n).padStart(2, "0")}`)) n++;
+  let faCode = `TILL-${br.code}-${code}`;
+  for (let i = 2; await tx.financialAccount.findFirst({ where: { business_id: businessId, code: faCode } }); i++) faCode = `TILL-${br.code}-${code}-${i}`;
+  const fa = await addFinancialAccount(tx, businessId, branchId, { code: faCode, name: `Till ${br.code} ${name}`, kind: "TILL", glCode: `571${String(n).padStart(2, "0")}`, glParent: "5710" });
   return tx.cashRegister.create({ data: { business_id: businessId, branch_id: branchId, location_id: loc.id, code, name, till_account_id: fa.id } });
 }
 

@@ -4489,6 +4489,60 @@
         ]
       }
     },
+    "/api/v1/admin/registers/{id}": {
+      "patch": {
+        "operationId": "AdminController_updateRegister",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminController_deleteRegister",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/users": {
       "get": {
         "operationId": "AdminController_users",
@@ -5545,6 +5599,10 @@
         "properties": {}
       },
       "RegisterDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateRegisterDto": {
         "type": "object",
         "properties": {}
       },

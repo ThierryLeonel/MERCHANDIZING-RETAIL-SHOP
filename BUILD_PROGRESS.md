@@ -1,6 +1,6 @@
 # BUILD_PROGRESS
 
-_Last updated: 2026-11-15 (session 5: chart & financial account editing, printing, sample contacts, backup & clear, audit retention, opening balances). Read this first when continuing the build._
+_Last updated: 2026-11-15 (session 5: chart & financial account editing, printing, sample contacts, backup & clear, audit retention, opening balances, registers). Read this first when continuing the build._
 
 ## Current phase
 **Phase 1 — complete and verified.** **Phase 2 — mostly implemented** (supplier invoices & payments, credit customers, returns, split payments, transfers, counts, adjustments, approvals, expenses, control-account reconciliation). Remaining Phase 2 items: supplier returns/credit notes, provider settlements and statement reconciliation workflows, auto-cancel of stale pending sales, POS paid-out and exchange-link UI. Phase 3/4 not started (schema foundations exist for promotions, bundles/kits, landed costs, settlements, reconciliations, integrations).
@@ -21,6 +21,7 @@ Verified = covered by automated tests that passed in this session (see "Commands
 - Backup & reset (Administration, `admin.backup` / `admin.reset`, Owner): full SQL backup download (FK-ordered INSERTs, deferred links updated at the end, restorable without superuser into a fresh migrated DB — verified table-for-table); clear transactions or everything (TRUNCATE, password + business-name confirmation, single-business only, audit kept). See documentation/operations/backup-recovery.md.
 - Audit log retention (`admin.audit_purge`, Owner): delete entries older than 6/12/24/36 months with password confirmation and optional CSV download first; DB trigger allows DELETE only with the purge flag and only for entries older than 6 months; UPDATE always refused; purge is itself audited.
 - Opening balances (`/opening-balances`, `accounting.opening_balances`, Owner + System Administrator): cash/bank/wallet balances, customer debts (open items payable and aged) and store credit, supplier debts (opening supplier invoices), other accounts; balancing to Opening balance equity; reversible while unpaid. See documentation/accounting/policies.md "Opening balances".
+- Cash registers (Administration → Branches & registers): create, edit (name; code while unused; stock location when no session is open; activate/deactivate — till must be empty and no open session), delete if never used (removes its till account and ledger account). Till ledger codes now pick the first free 571xx code.
 - Fixes found while testing: supplier update accepted arbitrary fields (now a validated DTO); report endpoints returned the Express response to an interceptor (server errors in logs); wrong confirmation/approver passwords returned 401 and signed the user out (now 400); refresh rate limit raised to 120/min (configurable).
 - Single-service hosting (Laravel Cloud): port opened immediately on IPv6+IPv4 with 503 while starting, in-process migrations, DB-stored signing secret when `JWT_SECRET` is absent.
 - Purchasing: PO lifecycle with approval threshold, partial receipts with accepted/damaged/rejected, over-receipt tolerance, batches/expiry, serials; supplier invoice matching with PPV (no double counting); supplier payments & advances.
@@ -34,7 +35,7 @@ Verified = covered by automated tests that passed in this session (see "Commands
 - Demo seed through services (reconciles exactly); production setup (no default credentials).
 - Docs: architecture, database, ERD (generated), permission matrix (generated), posting matrix, policies, pricing, reports, deployment, backup/recovery, feature status/limitations/backlog, OpenAPI (123 paths).
 
-Session 5 verification: `pnpm test` **69/69** (incl. opening balances with payment allocation, ageing and reconciliation) (adds chart/financial-account tests, audit retention incl. direct-SQL refusal, and a backup → restore into a fresh database → clear test), `pnpm test:e2e` **18/18** (incl. opening balances by the System Administrator) (adds accounts setup, sample contacts, printing, backup download, clear), drift check clean, lint clean, build OK.
+Session 5 verification: `pnpm test` **70/70** (incl. opening balances with payment allocation, ageing and reconciliation, and register lifecycle) (adds chart/financial-account tests, audit retention incl. direct-SQL refusal, and a backup → restore into a fresh database → clear test), `pnpm test:e2e` **19/19** (incl. opening balances by the System Administrator and register create/edit/delete) (adds accounts setup, sample contacts, printing, backup download, clear), drift check clean, lint clean, build OK.
 
 Session 4 verification: `pnpm test` **63/63**, `pnpm test:e2e` **11/11** (adds starter catalogue import, CSV customer import, void from Sales history), drift check clean, lint clean, build OK; Excel template download and export → re-import round trip checked in Chrome.
 
