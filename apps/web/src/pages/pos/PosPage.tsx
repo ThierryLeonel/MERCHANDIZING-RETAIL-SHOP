@@ -149,21 +149,21 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
   const quoteLine = (i: number) => quote?.lines?.[i];
 
   return (
-    <div className="grid h-full gap-4 lg:grid-cols-[1fr_420px]">
+    <div className="grid gap-3 sm:gap-4 lg:h-full lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px]">
       {/* ------------------------------------------------ left: catalogue */}
       <div className="flex min-h-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <form onSubmit={onScan} className="relative flex-1 min-w-[240px]">
+          <form onSubmit={onScan} className="relative min-w-[min(100%,220px)] flex-1">
             <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden />
             <Input ref={scanRef} aria-label="Scan barcode or enter SKU" placeholder="Scan barcode or type SKU, then Enter" className="h-12 pl-10 text-base" value={scan} onChange={(e) => setScan(e.target.value)} />
           </form>
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative min-w-[min(100%,200px)] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
             <Input aria-label="Search products" placeholder="Search products…" className="h-12 pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
         {scanErr && <div role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{scanErr}</div>}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="max-h-[55dvh] min-h-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-none">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
             {(search.length >= 2 ? results.data : shortcuts.data)?.map((p) => (
               <button key={p.variant_id} onClick={() => addItem(p)} className="flex min-h-24 flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xs hover:border-brand-600 hover:shadow-sm active:scale-[.99]">

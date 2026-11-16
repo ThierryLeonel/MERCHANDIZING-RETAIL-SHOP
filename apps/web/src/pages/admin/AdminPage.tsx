@@ -1,6 +1,6 @@
-import { Download, Plus } from "lucide-react";
+import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, Textarea, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorText, Field, Input, Modal, PageHeader, Pagination, SearchInput, Select, Status, Tabs, Textarea, useToast } from "../../components/ui";
 import { api, downloadFile } from "../../lib/api";
 import { date, dateTime, humanize, money } from "../../lib/format";
 import { useApi, useList } from "../../lib/hooks";
@@ -101,12 +101,37 @@ function RegisterForm({ register, branch, onClose, onSaved }: { register: any; b
   );
 }
 
+function BranchForm({ branch, onClose, onSaved }: { branch: any; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [f, setF] = useState({ code: branch.code, name: branch.name, phone: branch.phone ?? "", address: branch.address ?? "", active: branch.active });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try { await api(`/admin/branches/${branch.id}`, { method: "PATCH", body: { name: f.name, phone: f.phone, address: f.address, active: f.active, ...(f.code.trim().toUpperCase() !== branch.code ? { code: f.code } : {}) } }); onSaved(`Branch ${f.code.toUpperCase()} saved`); }
+    catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={`Edit branch ${branch.code}`} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={f.name.trim().length < 2 || f.code.trim().length < 2} onClick={save}>Save</Button></>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Code" hint="Can only change while the branch has no transactions">{(id, d) => <Input id={id} aria-describedby={d} value={f.code} maxLength={16} onChange={(e) => setF({ ...f, code: e.target.value })} />}</Field>
+        <Field label="Name">{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
+        <Field label="Phone">{(id) => <Input id={id} type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />}</Field>
+        <Field label="Address">{(id) => <Input id={id} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} />}</Field>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (inactive branches disappear from the branch picker; close open cashier sessions first)</label>
+        <div className="sm:col-span-2"><ErrorText error={err} /></div>
+      </div>
+    </Modal>
+  );
+}
+
 function Branches() {
   const toast = useToast();
+  const { reload: refreshMe } = useSession();
   const q = useApi<any[]>("/admin/branches");
   const regs = useApi<any[]>("/admin/registers");
   const [open, setOpen] = useState<"branch" | "register" | null>(null);
   const [editReg, setEditReg] = useState<any>(null);
+  const [editBranch, setEditBranch] = useState<any>(null);
+  const [del, setDel] = useState<{ kind: "branch" | "register"; row: any } | null>(null);
   const [f, setF] = useState<any>({ code: "", name: "", kind: "STORE", branch_id: "" });
   const [err, setErr] = useState<unknown>(null);
   const save = async () => {
@@ -121,6 +146,8 @@ function Branches() {
           { key: "code", header: "Code" }, { key: "name", header: "Name" }, { key: "kind", header: "Type", render: (b) => <Badge>{humanize(b.kind)}</Badge> },
           { key: "locations", header: "Locations", render: (b) => <div className="flex flex-wrap gap-1">{b.locations.map((l: any) => <Badge key={l.id} tone={l.is_sellable ? "green" : "amber"}>{l.code}{l.is_default ? " (default)" : ""}</Badge>)}</div> },
           { key: "registers", header: "Registers", render: (b) => regs.data?.filter((r) => r.branch_id === b.id).map((r) => r.code).join(", ") || "—" },
+          { key: "active", header: "Status", render: (b) => b.active ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge> },
+          { key: "e", header: "", align: "right", render: (b) => <div className="flex justify-end gap-1"><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditBranch(b)} aria-label={`Edit branch ${b.code}`}>Edit</Button><Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDel({ kind: "branch", row: b })} aria-label={`Delete branch ${b.code}`}>Delete</Button></div> },
         ]} />
       </Card>
       <Card title="Cash registers" padded={false} actions={<Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setOpen("register")}>New register</Button>}>
@@ -131,9 +158,16 @@ function Branches() {
           { key: "location", header: "Stock location", render: (r) => r.location?.code ?? "—" },
           { key: "status", header: "Status", render: (r) => <div className="flex gap-1">{r.active ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge>}{r.open_session && <Badge tone="blue">Session {r.open_session} open</Badge>}</div> },
           { key: "used", header: "Sessions", align: "right", render: (r) => r.session_count },
-          { key: "e", header: "", align: "right", render: (r) => <Button size="sm" variant="ghost" onClick={() => setEditReg(r)}>Edit</Button> },
+          { key: "e", header: "", align: "right", render: (r) => <div className="flex justify-end gap-1"><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditReg(r)} aria-label={`Edit register ${r.code}`}>Edit</Button><Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" icon={<Trash2 className="h-4 w-4" />} onClick={() => setDel({ kind: "register", row: r })} aria-label={`Delete register ${r.code}`}>Delete</Button></div> },
         ]} />
       </Card>
+      {editBranch && <BranchForm branch={editBranch} onClose={() => setEditBranch(null)} onSaved={(m) => { setEditBranch(null); q.refetch(); regs.refetch(); refreshMe(); toast(m); }} />}
+      <ConfirmDialog open={!!del} danger title={del?.kind === "branch" ? `Delete branch ${del?.row.code}?` : `Delete register ${del?.row.code}?`} confirmLabel="Delete"
+        message={del?.kind === "branch"
+          ? "Only a branch with no sales, purchases, stock or postings can be deleted. Its default locations, unused registers, tills and safe are removed with it. A branch with history can be deactivated instead."
+          : "Only a register that never had a cashier session or sale can be deleted; its till account is removed with it. A register with history can be deactivated instead."}
+        onClose={() => setDel(null)}
+        onConfirm={async () => { const d = del!; await api(`/admin/${d.kind === "branch" ? "branches" : "registers"}/${d.row.id}`, { method: "DELETE" }); setDel(null); q.refetch(); regs.refetch(); if (d.kind === "branch") refreshMe(); toast(`${d.kind === "branch" ? "Branch" : "Register"} ${d.row.code} deleted`); }} />
       {editReg && <RegisterForm register={editReg} branch={q.data?.find((b) => b.id === editReg.branch_id)} onClose={() => setEditReg(null)} onSaved={(m) => { setEditReg(null); regs.refetch(); toast(m); }} />}
       <Modal open={!!open} onClose={() => setOpen(null)} title={open === "branch" ? "New branch" : "New register"} footer={<><Button variant="secondary" onClick={() => setOpen(null)}>Cancel</Button><Button onClick={save}>Create</Button></>}>
         <div className="grid gap-3 sm:grid-cols-2">

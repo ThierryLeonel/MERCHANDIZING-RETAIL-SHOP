@@ -29,6 +29,7 @@ class SettingsDto {
   @IsOptional() @IsObject() settings?: Record<string, unknown>;
 }
 class BranchDto { @IsString() @MinLength(2) @MaxLength(16) code: string; @IsString() @MinLength(2) name: string; @IsIn(["STORE", "WAREHOUSE"]) kind: "STORE" | "WAREHOUSE"; @IsOptional() @IsString() phone?: string; @IsOptional() @IsString() address?: string }
+class UpdateBranchDto { @IsOptional() @IsString() @MinLength(2) @MaxLength(16) code?: string; @IsOptional() @IsString() @MinLength(2) name?: string; @IsOptional() @IsString() phone?: string; @IsOptional() @IsString() address?: string; @IsOptional() @IsBoolean() active?: boolean }
 class LocationDto { @IsUUID() branch_id: string; @IsString() @MinLength(2) code: string; @IsString() name: string; @IsIn(["SALES_FLOOR", "STOREROOM", "QUARANTINE", "DAMAGED"]) kind: any }
 class RegisterDto { @IsUUID() branch_id: string; @IsOptional() @IsUUID() location_id?: string; @IsString() @MinLength(2) @MaxLength(16) code: string; @IsString() @MinLength(2) name: string }
 class UpdateRegisterDto { @IsOptional() @IsString() @MinLength(2) name?: string; @IsOptional() @IsString() @MinLength(2) @MaxLength(16) code?: string; @IsOptional() @IsUUID() location_id?: string; @IsOptional() @IsBoolean() active?: boolean }
@@ -127,6 +128,99 @@ export class AdminController {
       await this.audit.record(a, { action: "branch.created", entityType: "branch", entityId: br.id, summary: `Branch ${br.code} created with default locations and safe`, branchId: br.id }, tx);
       return br;
     });
+  }
+
+  /** Counts the business records that tie a branch to its history (a branch with any of these cannot be deleted). */
+  private async branchHistory(id: string) {
+    const db = this.prisma.client;
+    const w = { branch_id: id };
+    const counts = await Promise.all([
+      db.sale.count({ where: w }), db.heldCart.count({ where: w }), db.payment.count({ where: w }), db.salesReturn.count({ where: w }),
+      db.purchaseOrder.count({ where: w }), db.goodsReceipt.count({ where: w }), db.supplierInvoice.count({ where: w }), db.supplierPayment.count({ where: w }), db.purchaseReturn.count({ where: w }),
+      db.stockMovement.count({ where: w }), db.stockTransfer.count({ where: { OR: [{ from_branch_id: id }, { to_branch_id: id }] } }), db.stockCount.count({ where: w }), db.stockAdjustment.count({ where: w }),
+      db.cashierSession.count({ where: w }), db.journalEntry.count({ where: w }), db.journalLine.count({ where: w }), db.expense.count({ where: w }), db.approvalRequest.count({ where: w }),
+      db.priceList.count({ where: w }), db.promotion.count({ where: w }),
+    ]);
+    return counts.reduce((x, y) => x + y, 0);
+  }
+
+  /** Rename, change contact details, re-code (only while unused), activate/deactivate. */
+  @Patch("branches/:id") @RequirePermissions("admin.settings")
+  async updateBranch(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: UpdateBranchDto) {
+    const db = this.prisma.client;
+    const br = await db.branch.findFirst({ where: { id, business_id: a.businessId } });
+    if (!br) throw notFound("Branch");
+    const data: { name?: string; code?: string; phone?: string | null; address?: string | null; active?: boolean } = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.phone !== undefined) data.phone = dto.phone.trim() || null;
+    if (dto.address !== undefined) data.address = dto.address.trim() || null;
+    if (dto.code !== undefined && dto.code.trim().toUpperCase() !== br.code) {
+      const code = dto.code.trim().toUpperCase();
+      if (await this.branchHistory(id)) throw invalid("BRANCH_IN_USE", "This branch already has transactions — its code cannot change (rename it instead)");
+      if (await db.branch.findFirst({ where: { business_id: a.businessId, code, id: { not: id } } })) throw invalid("DUPLICATE_CODE", `A branch with code ${code} already exists`);
+      data.code = code;
+    }
+    if (dto.active === false && br.active) {
+      if ((await db.branch.count({ where: { business_id: a.businessId, active: true } })) <= 1) throw invalid("LAST_BRANCH", "At least one branch must stay active");
+      const open = await db.cashierSession.findFirst({ where: { branch_id: id, status: { in: ["OPEN", "CLOSING"] } } });
+      if (open) throw invalid("SESSION_OPEN", `Close cashier session ${open.number} before deactivating this branch`);
+    }
+    if (dto.active !== undefined) data.active = dto.active;
+    await this.prisma.tx(async (tx) => {
+      await tx.branch.update({ where: { id }, data });
+      if (data.name || data.code) {
+        // keep the branch safe's names in step
+        const safes = await tx.financialAccount.findMany({ where: { branch_id: id, kind: "SAFE" } });
+        for (const fa of safes) {
+          const name = `Safe — ${data.name ?? br.name}`;
+          const code = data.code && fa.code === `SAFE-${br.code}` && !(await tx.financialAccount.findFirst({ where: { business_id: a.businessId, code: `SAFE-${data.code}` } })) ? `SAFE-${data.code}` : fa.code;
+          await tx.financialAccount.update({ where: { id: fa.id }, data: { name, code } });
+          await tx.account.update({ where: { id: fa.gl_account_id }, data: { name } });
+        }
+      }
+      await this.audit.record(a, { action: "branch.updated", entityType: "branch", entityId: id, summary: `Branch ${br.code} updated`, branchId: id, data: { before: { code: br.code, name: br.name, phone: br.phone, address: br.address, active: br.active }, after: data } }, tx);
+    });
+    return db.branch.findUniqueOrThrow({ where: { id } });
+  }
+
+  /** Deletes a branch that has no transactions, with its default locations, unused registers, tills and safe. */
+  @Delete("branches/:id") @RequirePermissions("admin.settings")
+  async deleteBranch(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string) {
+    const db = this.prisma.client;
+    const br = await db.branch.findFirst({ where: { id, business_id: a.businessId } });
+    if (!br) throw notFound("Branch");
+    if ((await db.branch.count({ where: { business_id: a.businessId } })) <= 1) throw invalid("LAST_BRANCH", "The only branch cannot be deleted");
+    if (br.active && (await db.branch.count({ where: { business_id: a.businessId, active: true } })) <= 1) throw invalid("LAST_BRANCH", "At least one branch must stay active");
+    if (await this.branchHistory(id)) throw invalid("BRANCH_IN_USE", `${br.code} has transactions and cannot be deleted — deactivate it instead`);
+    const stock = await db.stockBalance.count({ where: { branch_id: id, NOT: { qty_on_hand: 0 } } });
+    if (stock) throw invalid("BRANCH_IN_USE", `${br.code} still holds stock — deactivate it instead`);
+    try {
+      await this.prisma.tx(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.branch_delete', ${id}, true)`;
+        await tx.$executeRaw`UPDATE audit_events SET branch_id = NULL WHERE branch_id = ${id}::uuid`;
+        await tx.notification.deleteMany({ where: { branch_id: id } });
+        await tx.userBranchAccess.deleteMany({ where: { branch_id: id } });
+        await tx.user.updateMany({ where: { business_id: a.businessId, default_branch_id: id }, data: { default_branch_id: null } });
+        const regs = await tx.cashRegister.findMany({ where: { branch_id: id } });
+        await tx.cashRegister.deleteMany({ where: { branch_id: id } });
+        const fas = await tx.financialAccount.findMany({ where: { OR: [{ branch_id: id }, { id: { in: regs.map((r) => r.till_account_id) } }] } });
+        for (const fa of fas) {
+          if ((await tx.journalLine.count({ where: { OR: [{ account_id: fa.gl_account_id }, { financial_account_id: fa.id }] } })) + (await tx.payment.count({ where: { financial_account_id: fa.id } }))) throw invalid("BRANCH_IN_USE", `${fa.name} has postings — deactivate the branch instead`);
+          await tx.financialAccount.delete({ where: { id: fa.id } });
+          const glUsed = (await tx.financialAccount.count({ where: { gl_account_id: fa.gl_account_id } })) + (await tx.postingRule.count({ where: { account_id: fa.gl_account_id } })) + (await tx.journalLine.count({ where: { account_id: fa.gl_account_id } }));
+          if (!glUsed) await tx.account.delete({ where: { id: fa.gl_account_id } });
+        }
+        await tx.stockBalance.deleteMany({ where: { branch_id: id } });
+        await tx.inventoryCostPool.deleteMany({ where: { branch_id: id } });
+        await tx.location.deleteMany({ where: { branch_id: id } });
+        await tx.branch.delete({ where: { id } });
+        await this.audit.record(a, { action: "branch.deleted", entityType: "branch", entityId: id, summary: `Branch ${br.code} "${br.name}" deleted`, data: { code: br.code, name: br.name, registers: regs.map((r) => r.code) } }, tx);
+      });
+    } catch (e: any) {
+      if (e?.code === "P2003" || /foreign key/i.test(String(e?.message))) throw invalid("BRANCH_IN_USE", `${br.code} is referenced by other records — deactivate it instead`);
+      throw e;
+    }
+    return { id, deleted: true };
   }
 
   @Post("locations") @RequirePermissions("admin.settings")

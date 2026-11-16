@@ -87,7 +87,7 @@ export default function OpeningBalancesPage() {
       <Card title="1. Date">
         <div className="flex flex-wrap items-end gap-4">
           <Field label="Balances as of" hint="Usually the day before you start selling with the system">{(id, d) => <Input id={id} aria-describedby={d} type="date" max={o.today} value={date0} onChange={(e) => setAsOf(e.target.value)} />}</Field>
-          <Field label="Notes" className="min-w-[280px] flex-1">{(id) => <Input id={id} value={notes} placeholder="e.g. Figures from the 31 October stock count and bank statement" onChange={(e) => setNotes(e.target.value)} />}</Field>
+          <Field label="Notes" className="min-w-[min(100%,280px)] flex-1">{(id) => <Input id={id} value={notes} placeholder="e.g. Figures from the 31 October stock count and bank statement" onChange={(e) => setNotes(e.target.value)} />}</Field>
         </div>
       </Card>
 

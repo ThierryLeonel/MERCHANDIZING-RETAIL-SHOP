@@ -146,8 +146,13 @@ export async function createBranchWithDefaults(tx: Tx, businessId: string, input
     ? [["STORE", "Main store", "STOREROOM", true, true], ["QUAR", "Quarantine", "QUARANTINE", false, false], ["DMG", "Damaged", "DAMAGED", false, false]]
     : [["FLOOR", "Sales floor", "SALES_FLOOR", true, true], ["BACK", "Back store", "STOREROOM", true, false], ["QUAR", "Quarantine", "QUARANTINE", false, false], ["DMG", "Damaged", "DAMAGED", false, false]];
   for (const [code, name, kind, sellable, def] of defs) await tx.location.create({ data: { business_id: businessId, branch_id: br.id, code, name, kind, is_sellable: sellable, is_default: def } });
-  const safeCount = await tx.account.count({ where: { business_id: businessId, code: { startsWith: "573" } } });
-  await addFinancialAccount(tx, businessId, br.id, { code: `SAFE-${input.code}`, name: `Safe — ${input.name}`, kind: "SAFE", glCode: `573${safeCount + 1}`, glParent: "5700" });
+  // first free safe ledger code 5731, 5732… (a count would collide after a branch is deleted)
+  const usedSafe = new Set((await tx.account.findMany({ where: { business_id: businessId, code: { startsWith: "573" } }, select: { code: true } })).map((a) => a.code));
+  let n = 1;
+  while (usedSafe.has(`573${n}`)) n++;
+  let faCode = `SAFE-${input.code}`;
+  for (let i = 2; await tx.financialAccount.findFirst({ where: { business_id: businessId, code: faCode } }); i++) faCode = `SAFE-${input.code}-${i}`;
+  await addFinancialAccount(tx, businessId, br.id, { code: faCode, name: `Safe — ${input.name}`, kind: "SAFE", glCode: `573${n}`, glParent: "5700" });
   return br;
 }
 

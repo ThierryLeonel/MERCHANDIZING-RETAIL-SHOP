@@ -134,7 +134,7 @@ function SimpleList({ kind }: { kind: Exclude<Kind, "categories"> }) {
       {can("products.manage") && (
         <Card title={`Add a ${LABEL[kind]}`}>
           <form onSubmit={add} className="flex flex-wrap items-end gap-3">
-            <Field label="Name" required className="min-w-[240px] flex-1">{(id) => <Input id={id} required value={name} placeholder={kind === "units" ? "e.g. Kilogram, Bale, Heap, Bucket" : undefined} onChange={(e) => setName(e.target.value)} />}</Field>
+            <Field label="Name" required className="min-w-[min(100%,240px)] flex-1">{(id) => <Input id={id} required value={name} placeholder={kind === "units" ? "e.g. Kilogram, Bale, Heap, Bucket" : undefined} onChange={(e) => setName(e.target.value)} />}</Field>
             {kind === "units" && <Field label="Short code" hint="Shown on receipts, e.g. KG">{(id, d) => <Input id={id} aria-describedby={d} className="w-32 uppercase" maxLength={16} value={code} onChange={(e) => setCode(e.target.value)} />}</Field>}
             <Button type="submit" loading={busy} icon={<Plus className="h-4 w-4" />}>Add</Button>
           </form>

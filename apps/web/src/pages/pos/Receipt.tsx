@@ -6,7 +6,7 @@ export function Receipt({ sale }: { sale: any }) {
   const { me } = useSession();
   const b = me?.business;
   return (
-    <div className="print-area mx-auto w-[300px] bg-white p-3 font-mono text-[12px] leading-snug text-black">
+    <div className="print-area mx-auto w-full max-w-[300px] bg-white p-3 font-mono text-[12px] leading-snug text-black">
       <div className="text-center">
         <div className="text-[14px] font-bold">{b?.name}</div>
         {sale.branch && <div>{sale.branch.name}</div>}
