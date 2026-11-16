@@ -80,7 +80,7 @@ const statusTone: Record<string, string> = {
   DRAFT: "slate", CANCELLED: "slate", REJECTED: "red", FAILED: "red", REVERSED: "slate", DISCONTINUED: "slate", CONSUMED: "slate", DISABLED: "red", ON_HOLD: "amber",
 };
 export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: keyof typeof tones }) {
-  return <span className={cx("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset", tones[tone])}>{children}</span>;
+  return <span className={cx("inline-flex max-w-full items-center truncate whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset", tones[tone])}>{children}</span>;
 }
 export const Status = ({ value }: { value: string }) => <Badge tone={(statusTone[value] as any) ?? "slate"}>{humanize(value)}</Badge>;
 export const Money = ({ value, className }: { value: string | number | null | undefined; className?: string }) => <span className={cx("num whitespace-nowrap", className)}>{money(value)}</span>;
@@ -97,12 +97,12 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   return (
     <div role="alert" className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-      <div className="flex-1"><div className="font-medium">{e?.message ?? t("common.error")}</div>{e?.requestId && <div className="text-xs text-red-700/80">Reference: {e.requestId}</div>}</div>
+      <div className="min-w-0 flex-1 break-words"><div className="font-medium">{e?.message ?? t("common.error")}</div>{e?.requestId && <div className="text-xs text-red-700/80">Reference: {e.requestId}</div>}</div>
       {onRetry && <Button size="sm" variant="secondary" onClick={onRetry}>{t("common.retry")}</Button>}
     </div>
   );
 }
-export const ErrorText = ({ error }: { error: unknown }) => (error ? <p role="alert" className="text-sm text-red-600">{(error as Error).message}</p> : null);
+export const ErrorText = ({ error }: { error: unknown }) => (error ? <p role="alert" className="break-words text-sm text-red-600">{(error as Error).message}</p> : null);
 
 // ------------------------------------------------------------------- table
 export interface Column<T> { key: string; header: ReactNode; render?: (row: T) => ReactNode; sortable?: boolean; align?: "right" | "left" | "center"; className?: string }
@@ -123,7 +123,7 @@ export function DataTable<T extends Record<string, any>>({ columns, rows, loadin
         </thead>
         <tbody className="divide-y divide-slate-100">
           {loading && !rows ? <tr><td colSpan={columns.length}><Spinner /></td></tr>
-            : !rows?.length ? <tr><td colSpan={columns.length}>{empty ?? <EmptyState />}</td></tr>
+            : !rows?.length ? <tr><td colSpan={columns.length} className="px-3 sm:px-4">{empty == null ? <EmptyState /> : typeof empty === "string" ? <EmptyState title={empty} /> : empty}</td></tr>
             : rows.map((r, i) => (
               <tr key={r[rowKey] ?? i} className={cx("transition-colors hover:bg-slate-50", onRowClick && "cursor-pointer")} onClick={onRowClick ? () => onRowClick(r) : undefined} tabIndex={onRowClick ? 0 : undefined} onKeyDown={onRowClick ? (e) => e.key === "Enter" && onRowClick(r) : undefined}>
                 {columns.map((c) => <td key={c.key} className={cx("px-3 py-2.5 align-middle sm:px-4", c.align === "right" && "num text-right", c.className)}>{c.render ? c.render(r) : r[c.key]}</td>)}

@@ -58,3 +58,7 @@ body { overflow-x: hidden; }
   .anim-fade, .anim-pop, .anim-slide { animation: none }
   *, *::before, *::after { transition-duration: 0ms !important }
 }
+
+/* long words (emails, references, codes) wrap instead of spilling out of their box */
+body { overflow-wrap: break-word; }
+td, th { overflow-wrap: normal; }
