@@ -16,6 +16,7 @@ const ImportPage = lazy(() => import("./pages/data/ImportPage"));
 const SalesPage = lazy(() => import("./pages/pos/SalesPage"));
 const OpeningBalances = lazy(() => import("./pages/accounting/OpeningBalancesPage"));
 const Inventory = lazy(() => import("./pages/inventory/InventoryPage"));
+const StartingStock = lazy(() => import("./pages/inventory/StartingStockPage"));
 const Purchasing = lazy(() => import("./pages/purchasing/PurchasingPage"));
 const PurchaseOrderDetail = lazy(() => import("./pages/purchasing/PurchaseOrderDetail"));
 const PurchaseOrderForm = lazy(() => import("./pages/purchasing/PurchaseOrderForm"));
@@ -51,6 +52,7 @@ export function App() {
           <Route path="/products/setup" element={<CatalogueSetup />} />
           <Route path="/products/:id" element={<ProductDetail />} />
           <Route path="/inventory" element={<Inventory />} />
+          <Route path="/starting-stock" element={<StartingStock />} />
           <Route path="/purchasing" element={<Purchasing />} />
           <Route path="/purchasing/orders/new" element={<PurchaseOrderForm />} />
           <Route path="/purchasing/orders/:id" element={<PurchaseOrderDetail />} />

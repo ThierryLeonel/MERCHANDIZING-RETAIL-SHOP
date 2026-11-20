@@ -98,7 +98,8 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
   const [sessionOpen, setSessionOpen] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
   const shortcuts = useApi<any[]>(`/catalogue/sellables${qs({ branch_id: branchId, shortcuts: "true" })}`, [branchId]);
-  const results = useApi<any[]>(search.length >= 2 ? `/catalogue/sellables${qs({ branch_id: branchId, search })}` : null, [branchId, search]);
+  // always re-checked: prices, stock and deactivated categories change while the till is open
+  const results = useApi<any[]>(search.length >= 2 ? `/catalogue/sellables${qs({ branch_id: branchId, search })}` : null, [branchId, search], { staleTime: 0 });
 
   const addItem = useCallback((item: any, opts: { unit?: { unit_id: string | null; unit_code: string | null; factor: string }; serial?: { id: string; serial: string } } = {}) => {
     if (item.track_serials && !opts.serial) { setSerialFor(item); return; }

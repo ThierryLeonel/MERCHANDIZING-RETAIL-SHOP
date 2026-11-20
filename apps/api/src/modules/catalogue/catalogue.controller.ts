@@ -11,6 +11,18 @@ import { PrismaService } from "../../common/prisma.service";
 import { IsDecimalValue } from "../../common/validators";
 import { assertPriceFloor, CatalogueService } from "./catalogue.service";
 import { PricingService } from "./pricing.service";
+import { BuiltinCatalogueService } from "./builtin-catalogue.service";
+
+class StartingStockLineDto {
+  @IsUUID() variant_id!: string;
+  @IsOptional() @IsDecimalValue() quantity?: string | null;
+  @IsOptional() @IsDecimalValue() unit_cost?: string | null;
+  @IsOptional() @IsDecimalValue() retail_price?: string | null;
+}
+class StartingStockDto {
+  @IsUUID() branch_id!: string;
+  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => StartingStockLineDto) lines!: StartingStockLineDto[];
+}
 
 class BarcodeDto {
   @IsString() @MinLength(3) @MaxLength(64) code: string;
@@ -117,7 +129,21 @@ class PriceQuoteQuery {
 @ApiBearerAuth()
 @Controller()
 export class CatalogueController {
-  constructor(private svc: CatalogueService, private prisma: PrismaService, private pricing: PricingService, private audit: AuditService) {}
+  constructor(private svc: CatalogueService, private prisma: PrismaService, private pricing: PricingService, private audit: AuditService, private builtin: BuiltinCatalogueService) {}
+
+  /** The shop's built-in catalogue: how many of its items exist now. */
+  @Get("catalogue/builtin") @RequirePermissions("products.view")
+  builtinStatus(@Auth() a: AuthContext) { return this.builtin.status(a.businessId); }
+
+  /** Re-adds built-in items that are missing (deleted, or cleared). Never overwrites existing products. */
+  @Post("catalogue/builtin/install") @RequirePermissions("products.manage")
+  installBuiltin(@Auth() a: AuthContext) { return this.builtin.install(a, "manual"); }
+
+  @Get("inventory/starting-stock") @RequirePermissions("inventory.opening")
+  startingStock(@Auth() a: AuthContext, @Query("branch_id", ParseUUIDPipe) branchId: string) { return this.builtin.startingStock(a, branchId); }
+
+  @Post("inventory/starting-stock") @RequirePermissions("inventory.opening")
+  saveStartingStock(@Auth() a: AuthContext, @Body() dto: StartingStockDto) { return this.builtin.saveStartingStock(a, dto); }
 
   @Get("products") @RequirePermissions("products.view")
   list(@Auth() a: AuthContext, @Query() q: ProductQuery) { return this.svc.listProducts(a, q); }

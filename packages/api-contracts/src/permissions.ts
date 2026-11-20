@@ -80,7 +80,7 @@ export const DEFAULT_ROLES: Record<string, { name: string; description: string; 
     permissions: [
       "dashboard.view", "pos.sell", "pos.hold", "pos.discount", "pos.price_override", "pos.credit_sale", "pos.return", "pos.confirm_payment",
       "sessions.open", "sessions.close", "sessions.cash_drop", "sessions.paid_out", "sessions.view_all",
-      "products.view", "products.manage", "products.view_cost", "prices.manage",
+      "products.view", "products.view_cost", "prices.manage",
       "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.count",
       "purchasing.view", "purchasing.manage", "purchasing.receive", "suppliers.view", "suppliers.manage",
       "customers.view", "customers.manage", "customers.credit", "finance.view", "expenses.manage",
@@ -115,8 +115,8 @@ export const DEFAULT_ROLES: Record<string, { name: string; description: string; 
   },
   SYSTEM_ADMIN: {
     name: "System Administrator",
-    description: "Technical administration — no financial approval authority",
-    permissions: ["dashboard.view", "admin.users", "admin.roles", "admin.settings", "admin.audit", "products.view", "accounting.opening_balances"],
+    description: "Technical administration and catalogue set-up — no financial approval authority",
+    permissions: ["dashboard.view", "admin.users", "admin.roles", "admin.settings", "admin.audit", "products.view", "products.manage", "products.view_cost", "prices.manage", "inventory.view", "inventory.opening", "data.import", "accounting.opening_balances"],
   },
   AUDITOR: { name: "Read-only Auditor", description: "Read-only access to records and reports", permissions: VIEW_ONLY },
 };

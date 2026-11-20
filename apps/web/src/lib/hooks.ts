@@ -2,8 +2,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useState } from "react";
 import { api, qs } from "./api";
 
-export function useApi<T = any>(path: string | null, deps: unknown[] = []) {
-  return useQuery<T>({ queryKey: [path, ...deps], queryFn: () => api<T>(path!), enabled: !!path, placeholderData: keepPreviousData });
+export function useApi<T = any>(path: string | null, deps: unknown[] = [], opts: { staleTime?: number } = {}) {
+  return useQuery<T>({ queryKey: [path, ...deps], queryFn: () => api<T>(path!), enabled: !!path, placeholderData: keepPreviousData, ...(opts.staleTime != null ? { staleTime: opts.staleTime } : {}) });
 }
 /** Paged list state (search, sort, page) bound to an API path. */
 export function useList<T = any>(base: string | null, extra: Record<string, unknown> = {}, defaults: { sort?: string; order?: "asc" | "desc"; pageSize?: number; search?: string } = {}) {

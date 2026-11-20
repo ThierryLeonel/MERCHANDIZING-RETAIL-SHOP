@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, PackagePlus, Plus, RotateCcw } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Badge, Button, Card, DataTable, ErrorText, Field, Input, Modal, PageHeader, Select, Tabs, useToast } from "../../components/ui";
@@ -37,6 +37,37 @@ function treeOrder(cats: any[]) {
   return out;
 }
 
+/** The shop's built-in catalogue (599 products in 13 categories): status and "re-add missing items". */
+function BuiltinCatalogue({ onChanged }: { onChanged: () => void }) {
+  const { can } = useSession();
+  const toast = useToast();
+  const st = useApi<{ total: number; categories: number; present: number; missing: number }>("/catalogue/builtin");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
+  if (!st.data) return null;
+  const reAdd = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api<{ created: number; categories_created: number }>("/catalogue/builtin/install", { method: "POST" });
+      toast(`${r.created} built-in products re-added${r.categories_created ? `, ${r.categories_created} categories` : ""}`); st.refetch(); onChanged();
+    } catch (e) { setErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-slate-800">Built-in catalogue</h2>
+          <p className="mt-1 text-sm text-slate-600">Your shop's stock list is built in: {st.data.total} products in {st.data.categories} categories. <strong>{st.data.present}</strong> are in the catalogue{st.data.missing ? <>, <strong>{st.data.missing}</strong> were deleted</> : ""}. Edit, deactivate or delete them like any product; selling prices and buying prices are set on Starting stock.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {can("inventory.opening") && <Link to="/starting-stock"><Button size="sm" icon={<PackagePlus className="h-4 w-4" />}>Starting stock</Button></Link>}
+          {can("products.manage") && st.data.missing > 0 && <Button size="sm" variant="secondary" loading={busy} icon={<RotateCcw className="h-4 w-4" />} onClick={reAdd}>Re-add {st.data.missing} missing</Button>}
+        </div>
+      </div>
+      <ErrorText error={err} />
+    </Card>
+  );
+}
+
 function Categories() {
   const { can } = useSession();
   const toast = useToast();
@@ -46,6 +77,14 @@ function Categories() {
   const [f, setF] = useState({ name: "", parent_id: "", department_id: "" });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<unknown>(null);
   const [editing, setEditing] = useState<any>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const toggle = async (c: any) => {
+    setToggling(c.id);
+    try {
+      await api(`/catalogue/categories/${c.id}`, { method: "PATCH", body: { active: !c.active } });
+      toast(c.active ? `“${c.name}” deactivated — its products are hidden at the till` : `“${c.name}” is active again`); list.refetch();
+    } catch (e2) { toast((e2 as Error).message, "error"); } finally { setToggling(null); }
+  };
   const add = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr(null);
     try {
@@ -55,6 +94,7 @@ function Categories() {
   };
   return (
     <div className="space-y-4">
+      <BuiltinCatalogue onChanged={list.refetch} />
       {can("products.manage") && (
         <Card title="Add a category">
           <form onSubmit={add} className="grid items-end gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -73,7 +113,10 @@ function Categories() {
           { key: "dept", header: "Department", render: (c) => c.department_name ?? "—" },
           { key: "count", header: "Products", align: "right", render: (c) => <Link className="text-brand-700 hover:underline" to={`/products?category_id=${c.id}`}>{c.product_count}</Link> },
           { key: "status", header: "Status", render: (c) => c.active ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge> },
-          { key: "a", header: "", align: "right", render: (c) => can("products.manage") && <Button size="sm" variant="secondary" onClick={() => setEditing(c)}>Edit</Button> },
+          { key: "a", header: "", align: "right", render: (c) => can("products.manage") && <div className="flex justify-end gap-1">
+            <Button size="sm" variant="ghost" loading={toggling === c.id} icon={c.active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />} onClick={() => toggle(c)} aria-label={`${c.active ? "Deactivate" : "Activate"} ${c.name}`}>{c.active ? "Deactivate" : "Activate"}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setEditing(c)} aria-label={`Edit ${c.name}`}>Edit</Button>
+          </div> },
         ]} />
       </Card>
       {editing && <CategoryEdit cat={editing} all={rows} departments={ref.data?.departments ?? []} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.refetch(); toast("Category updated"); }} />}
@@ -107,7 +150,7 @@ function CategoryEdit({ cat, all, departments, onClose, onSaved }: { cat: any; a
         <Field label="Name" required>{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />}</Field>
         <Field label="Inside category">{(id) => <Select id={id} value={f.parent_id} onChange={(e) => setF({ ...f, parent_id: e.target.value })}><option value="">— Top level —</option>{all.filter((c) => !blocked.has(c.id)).map((c) => <option key={c.id} value={c.id}>{"  ".repeat(c.depth)}{c.name}</option>)}</Select>}</Field>
         <Field label="Department">{(id) => <Select id={id} value={f.department_id} onChange={(e) => setF({ ...f, department_id: e.target.value })}><option value="">—</option>{departments.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>}</Field>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (inactive categories are hidden when creating products; existing products keep them)</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active (inactive categories and everything inside them are hidden at the till and when creating products; nothing is deleted)</label>
         {cat.product_count > 0 && <p className="text-xs text-slate-500">{cat.product_count} product(s) use this category.</p>}
         <ErrorText error={err} />
       </div>

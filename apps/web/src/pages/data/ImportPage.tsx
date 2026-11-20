@@ -6,7 +6,6 @@ import { api } from "../../lib/api";
 import { useSession } from "../../lib/session";
 import { downloadXlsx, readRows, SheetRow } from "../../lib/spreadsheet";
 import { SAMPLE_CUSTOMERS, SAMPLE_SUPPLIERS } from "./sample-contacts";
-import { starterRows, STARTER_COLUMNS } from "./starter-catalogue";
 
 type Kind = "products" | "stock" | "customers" | "suppliers";
 interface RowResult { row: number; action: "create" | "update" | "skip"; label: string; errors: string[]; warnings: string[] }
@@ -126,12 +125,11 @@ function ImportPanel({ kind }: { kind: Kind }) {
       setSource({ name: f.name, rows });
     } catch (e2) { setErr(e2); setSource(null); }
   };
-  const download = async (what: "template" | "current" | "starter") => {
+  const download = async (what: "template" | "current") => {
     setBusy(what); setErr(null);
     try {
       const t = TEMPLATES[kind];
       if (what === "template") await downloadXlsx(`${kind}-template.xlsx`, t.columns, [], t.help);
-      else if (what === "starter") await downloadXlsx("starter-catalogue.xlsx", [...STARTER_COLUMNS], starterRows(), TEMPLATES.products.help);
       else {
         const rows = await api<Record<string, string>[]>(`/imports/${kind}/export`);
         await downloadXlsx(`${kind}-${new Date().toISOString().slice(0, 10)}.xlsx`, rows.length ? Object.keys(rows[0]) : t.columns, rows, kind === "products" ? t.help : undefined);
@@ -167,12 +165,8 @@ function ImportPanel({ kind }: { kind: Kind }) {
           )}
           {kind === "products" && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-              <div className="flex items-center gap-2 font-medium text-emerald-900"><Sparkles className="h-4 w-4" /> Starter catalogue for a mini-supermarket</div>
-              <p className="mt-1 text-sm text-emerald-900">About {starterRows().length} everyday products in {new Set(starterRows().map((r) => r.Category)).size} categories (rice, oil, milk, drinks, soap, diapers, bulk goods…), prices left empty for you to set. Load it as it is and edit in Products, or download it, adjust it in Excel and import it.</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => { setDone(null); setSource({ name: "Starter catalogue", rows: starterRows() }); }}>Use the starter catalogue</Button>
-                <Button size="sm" variant="secondary" loading={busy === "starter"} onClick={() => download("starter")}>Download it to edit first</Button>
-              </div>
+              <div className="flex items-center gap-2 font-medium text-emerald-900"><Sparkles className="h-4 w-4" /> Your stock list is built in</div>
+              <p className="mt-1 text-sm text-emerald-900">The shop's 599 products in 13 categories are already in the catalogue. Set their buying and selling prices and post the counted quantities on <Link className="font-medium underline" to="/starting-stock">Starting stock</Link>; manage categories (and re-add deleted items) in <Link className="font-medium underline" to="/products/setup">Catalogue setup</Link>. Use this page for products that are not in the list, or to update many at once in Excel.</p>
             </div>
           )}
         </Card>

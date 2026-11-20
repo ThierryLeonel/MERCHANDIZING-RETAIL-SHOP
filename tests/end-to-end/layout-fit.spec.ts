@@ -41,7 +41,7 @@ async function spills(page: Page) {
 for (const vp of [{ name: "desktop", width: 1440, height: 900 }, { name: "phone", width: 375, height: 740 }]) {
   test(`text stays inside its box (${vp.name})`, async ({ browser }) => {
     const page = await signIn(browser, vp);
-    const visits: [string, string | null][] = [["/", null], ["/admin", "Branches & registers"], ["/admin", "Business settings"], ["/products", null], ["/customers", null], ["/opening-balances", null], ["/import", null]];
+    const visits: [string, string | null][] = [["/", null], ["/admin", "Branches & registers"], ["/admin", "Business settings"], ["/products", null], ["/customers", null], ["/opening-balances", null], ["/import", null], ["/starting-stock", null], ["/products/setup", null]];
     for (const [path, tab] of visits) {
       await page.goto(path);
       await expect(page.locator("#main section").first()).toBeVisible();

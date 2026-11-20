@@ -1,3 +1,4 @@
+import { inactiveCategoryIds } from "../catalogue/catalogue.service";
 import { Injectable, Logger } from "@nestjs/common";
 import type { Business, PaymentMethod, Prisma, PriceListKind, Sale, Tx } from "@retail/db";
 import { randomBytes } from "node:crypto";
@@ -130,10 +131,12 @@ export class SalesService {
 
       // ---- price lines on the server (client prices are never trusted)
       const priced: (Prisma.SaleLineCreateWithoutSaleInput & { _variant: any; _tax: any })[] = [];
+      let hiddenCats: string[] | undefined;
       let lineNo = 0;
       for (const l of input.lines) {
         const variant = await tx.productVariant.findFirst({ where: { id: l.variant_id, business_id: auth.businessId }, include: { product: true, unit_conversions: true } });
         if (!variant || variant.status !== "ACTIVE") throw invalid("VARIANT_UNAVAILABLE", "Product is not available for sale");
+        if (variant.product.category_id && (hiddenCats ??= await inactiveCategoryIds(tx, auth.businessId)).includes(variant.product.category_id)) throw invalid("CATEGORY_INACTIVE", `${variant.name} is in a deactivated category and cannot be sold`);
         let factor = D(1);
         let unitCode = (await tx.unit.findUnique({ where: { id: variant.product.base_unit_id } }))?.code ?? "PCS";
         if (l.unit_id && l.unit_id !== variant.product.base_unit_id) {

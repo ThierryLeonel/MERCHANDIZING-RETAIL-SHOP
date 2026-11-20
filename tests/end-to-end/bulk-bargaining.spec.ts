@@ -21,11 +21,11 @@ test.describe.serial("stock categories, bulk goods and bargaining", () => {
     await page.getByLabel("Name").fill("Rice & grains (loose)");
     await expect(page.getByLabel("Name")).toHaveValue("Rice & grains (loose)");
     await page.getByLabel("Inside category").selectOption({ label: "Bulk & loose goods" });
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.locator("td", { hasText: "Rice & grains (loose)" })).toBeVisible();
     await page.getByLabel("Name").fill("RICE & grains (loose)");
     await page.getByLabel("Inside category").selectOption({ label: "Bulk & loose goods" });
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("already exists");
   });
 

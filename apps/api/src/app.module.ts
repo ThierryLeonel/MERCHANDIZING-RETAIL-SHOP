@@ -27,6 +27,7 @@ import { AuthController } from "./modules/auth/auth.controller";
 import { AuthService } from "./modules/auth/auth.service";
 import { CatalogueController } from "./modules/catalogue/catalogue.controller";
 import { CatalogueService } from "./modules/catalogue/catalogue.service";
+import { BuiltinCatalogueService } from "./modules/catalogue/builtin-catalogue.service";
 import { PricingService } from "./modules/catalogue/pricing.service";
 import { CustomersController } from "./modules/customers/customers.controller";
 import { CustomersService } from "./modules/customers/customers.service";
@@ -48,7 +49,7 @@ import { SystemController } from "./modules/system/system.controller";
 export const SERVICES = [
   PrismaService, AuditService, SequenceService, SettingsService, PostingService, ApprovalsService, StockLedgerService, PricingService,
   AuthService, CatalogueService, PurchasingService, InventoryService, SalesService, FinanceService, CustomersService, AccountingService,
-  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService, OpeningBalanceService,
+  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService, OpeningBalanceService, BuiltinCatalogueService,
 ];
 
 @Module({

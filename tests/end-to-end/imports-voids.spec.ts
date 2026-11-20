@@ -12,19 +12,42 @@ async function as(browser: Browser, email: string): Promise<Page> {
   return page;
 }
 
-test.describe.serial("imports, starter catalogue and voids", () => {
-  test("owner loads the starter catalogue; products without a price are flagged", async ({ browser }) => {
+test.describe.serial("built-in catalogue, imports and voids", () => {
+  test("built-in catalogue: owner adds it, enters starting stock with prices, and a deactivated category disappears from the till", async ({ browser }) => {
     const page = await as(browser, "owner@mboa.demo");
-    await page.getByRole("link", { name: "Import & export" }).click();
-    await page.getByRole("button", { name: "Use the starter catalogue" }).click();
-    await expect(page.getByText("3. Review and import")).toBeVisible();
-    const importBtn = page.getByRole("button", { name: /^Import \d+ products$/ });
-    await expect(importBtn).toBeEnabled();
-    await importBtn.click();
-    await expect(page.getByText("Import complete")).toBeVisible({ timeout: 60_000 });
-    await page.getByRole("link", { name: "Go to Products" }).click();
-    await page.getByPlaceholder("Search name, code, SKU or barcode").fill("Rice, perfumed");
-    await expect(page.locator("tr", { hasText: "Rice, perfumed 5 kg" }).getByText("Price not set")).toBeVisible();
+    await page.goto("/products/setup");
+    await expect(page.getByText("Built-in catalogue")).toBeVisible();
+    await page.getByRole("button", { name: /^Re-add 599 missing$/ }).click(); // the demo business starts without it
+    await expect(page.getByText(/599 built-in products re-added, 13 categories/)).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator("tr", { hasText: "Babies & Mother Care" })).toBeVisible();
+
+    // starting stock: the counted quantity is pre-filled; enter buying and selling prices
+    await page.getByRole("button", { name: "Starting stock" }).click();
+    await page.getByPlaceholder("Search products").fill("Hand Fans");
+    await expect(page.getByLabel("Quantity of Hand Fans")).toHaveValue("9");
+    await page.getByLabel("Buying price of Hand Fans").click();
+    await page.keyboard.type("1500", { delay: 30 });
+    await page.getByLabel("Selling price of Hand Fans").fill("2500");
+    await expect(page.getByLabel("Buying price of Hand Fans")).toHaveValue("1500");
+    await page.getByRole("button", { name: "Save starting stock" }).click();
+    await expect(page.getByText(/1 products stocked \(OPN-/)).toBeVisible();
+    await expect(page.getByLabel("Quantity of Hand Fans")).toHaveCount(0);
+
+    // sold at the till while its category is active…
+    const cashier = await as(browser, "cashier2.akwa@mboa.demo");
+    await cashier.getByRole("link", { name: "Point of Sale" }).click();
+    await cashier.getByLabel("Search products").fill("Hand Fans");
+    await expect(cashier.getByRole("button", { name: /Hand Fans/ }).first()).toBeVisible();
+
+    // …hidden once the category is deactivated, back when reactivated
+    await page.goto("/products/setup");
+    await page.getByRole("button", { name: "Deactivate Household / Home" }).click();
+    await expect(page.getByText("“Household / Home” deactivated")).toBeVisible();
+    await cashier.getByLabel("Search products").fill("");
+    await cashier.getByLabel("Search products").fill("Hand Fans");
+    await expect(cashier.getByText("No products match “Hand Fans”.")).toBeVisible();
+    await page.getByRole("button", { name: "Activate Household / Home" }).click();
+    await expect(page.getByText("“Household / Home” is active again")).toBeVisible();
   });
 
   test("owner imports customers from a CSV file (semicolon-separated, French headers)", async ({ browser }) => {

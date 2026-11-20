@@ -43,6 +43,14 @@ export interface ProductInput {
 
 const SINGLE_VARIANT_TYPES: ProductType[] = ["STANDARD", "PREPACKED_SET", "NON_STOCK", "BULK"];
 
+/** Categories that are inactive themselves or sit under an inactive category: their products are not sold. */
+export async function inactiveCategoryIds(db: { category: { findMany: (a: any) => Promise<{ id: string; parent_id: string | null; active: boolean }[]> } }, businessId: string): Promise<string[]> {
+  const all = await db.category.findMany({ where: { business_id: businessId }, select: { id: true, parent_id: true, active: true } });
+  const out = all.filter((c) => !c.active).map((c) => c.id);
+  for (let i = 0; i < out.length; i++) for (const c of all) if (c.parent_id === out[i] && !out.includes(c.id)) out.push(c.id);
+  return out;
+}
+
 /** Minimum price must not exceed the retail price; negotiable products need a minimum price on every SKU. */
 export function assertPriceFloor(negotiable: boolean, v: { sku: string; retail_price: unknown; min_price?: unknown }) {
   const min = v.min_price != null && v.min_price !== "" ? D(v.min_price as string) : null;
@@ -269,7 +277,14 @@ export class CatalogueService {
       : await this.prisma.client.productVariant.findUnique({ where: { business_id_sku: { business_id: auth.businessId, sku: c.toUpperCase() } } });
     if (!variant) throw notFound(`Product for code "${c}"`);
     const [item] = await this.sellables(auth, { branchId, variantIds: [variant.id] });
-    if (!item) throw notFound(`Product for code "${c}"`);
+    if (!item) {
+      const p = await this.prisma.client.product.findUnique({ where: { id: variant.product_id } });
+      if (p?.category_id && (await inactiveCategoryIds(this.prisma.client, auth.businessId)).includes(p.category_id)) {
+        const cat = await this.prisma.client.category.findUnique({ where: { id: p.category_id } });
+        throw invalid("CATEGORY_INACTIVE", `${variant.name} is in a deactivated category (${cat?.name}) and cannot be sold`);
+      }
+      throw notFound(`Product for code "${c}"`);
+    }
     let unit: { unit_id: string | null; unit_code: string | null; factor: string } = { unit_id: null, unit_code: item.base_unit_code, factor: "1" };
     if (bc?.unit_id) {
       const u = await this.prisma.client.unit.findUnique({ where: { id: bc.unit_id } });
@@ -280,12 +295,19 @@ export class CatalogueService {
 
   /** Sellable variants with branch price and available quantity (cost hidden unless permitted). */
   async sellables(auth: AuthContext, opts: { branchId: string; search?: string; shortcutsOnly?: boolean; variantIds?: string[]; take?: number; categoryId?: string }) {
+    const hidden = await inactiveCategoryIds(this.prisma.client, auth.businessId);
     const variants = await this.prisma.client.productVariant.findMany({
       where: {
         business_id: auth.businessId, status: "ACTIVE",
         ...(opts.variantIds ? { id: { in: opts.variantIds } } : {}),
         ...(opts.shortcutsOnly ? { is_shortcut: true } : {}),
-        ...(opts.categoryId ? { product: { category_id: { in: await this.categoryTree(auth.businessId, opts.categoryId) } } } : {}),
+        product: {
+          AND: [
+            ...(opts.categoryId ? [{ category_id: { in: await this.categoryTree(auth.businessId, opts.categoryId) } }] : []),
+            // products of deactivated categories are not offered at the till
+            ...(hidden.length ? [{ OR: [{ category_id: null }, { category_id: { notIn: hidden } }] }] : []),
+          ],
+        },
         ...(opts.search ? { OR: [{ name: { contains: opts.search, mode: "insensitive" } }, { sku: { contains: opts.search, mode: "insensitive" } }, { product: { name: { contains: opts.search, mode: "insensitive" } } }, { barcodes: { some: { code: opts.search } } }] } : {}),
       },
       include: { product: true, unit_conversions: true },

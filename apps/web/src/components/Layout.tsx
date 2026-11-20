@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, Boxes, Receipt, CheckSquare, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, Package, Settings, ShoppingCart, Scale, Truck, Upload, Users, Wallet, X } from "lucide-react";
+import { BarChart3, BookOpen, Boxes, Receipt, CheckSquare, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, Package, PackagePlus, Settings, ShoppingCart, Scale, Truck, Upload, Users, Wallet, X } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import type { PermissionCode } from "@retail/api-contracts";
@@ -19,6 +19,7 @@ export const NAV: { to: string; label: MessageKey; icon: typeof LayoutDashboard;
   { to: "/accounting", label: "nav.accounting", icon: BookOpen, any: ["accounting.view", "reports.financial"] },
   { to: "/reports", label: "nav.reports", icon: BarChart3, any: ["reports.view"] },
   { to: "/approvals", label: "nav.approvals", icon: CheckSquare, any: ["approvals.view"] },
+  { to: "/starting-stock", label: "nav.starting_stock", icon: PackagePlus, any: ["inventory.opening"] },
   { to: "/opening-balances", label: "nav.opening", icon: Scale, any: ["accounting.opening_balances"] },
   { to: "/import", label: "nav.import", icon: Upload, any: ["data.import"] },
   { to: "/admin", label: "nav.admin", icon: Settings, any: ["admin.users", "admin.settings", "admin.audit"] },
@@ -49,7 +50,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className={cx("min-w-0 flex-1", collapsed && "lg:hidden")}><div className="truncate text-sm font-semibold">{me?.business.name}</div><div className="text-xs text-slate-500">Retail Suite</div></div>
           <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Close menu"><X className="h-5 w-5" /></button>
         </div>
-        <nav aria-label="Main navigation" className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        <nav aria-label="Main navigation" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
           {items.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === "/"} title={collapsed ? t(n.label) : undefined}
               className={({ isActive }) => cx("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150 lg:py-2", isActive ? "bg-brand-50 text-brand-800" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")}>

@@ -35,6 +35,9 @@ export async function startServer(httpServer?: Server): Promise<(req: IncomingMe
     await app.listen(config.port); // Node default: all IPv6 + IPv4 addresses where available
   }
   Logger.log(`API ready on port ${config.port} (/api/v1, docs /api/docs)`, "Bootstrap");
+  // built-in catalogue for businesses that do not have it yet (runs in the background; BUILTIN_CATALOGUE=off disables)
+  const { BuiltinCatalogueService } = await import("./modules/catalogue/builtin-catalogue.service");
+  void app.get(BuiltinCatalogueService).installPending().catch((e) => Logger.error(`Built-in catalogue: ${e?.message ?? e}`, "Bootstrap"));
   if (process.env.RUN_WORKER !== "false") {
     const worker = startWorkerLoop(app);
     process.on("SIGTERM", () => void worker.stop());
