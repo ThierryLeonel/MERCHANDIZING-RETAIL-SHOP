@@ -15,7 +15,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { DEFAULT_POLICIES } from "../../common/settings.service";
 import { IsDecimalValue } from "../../common/validators";
 import { hashPassword, validatePasswordStrength } from "../auth/auth.service";
-import { createBranchWithDefaults, createRegister } from "../../seed/business-setup";
+import { createBranchWithDefaults, createRegister, ensureDefaultRegister } from "../../seed/business-setup";
 
 class SettingsDto {
   @IsOptional() @IsString() @MinLength(2) name?: string;
@@ -125,9 +125,19 @@ export class AdminController {
   async createBranch(@Auth() a: AuthContext, @Body() dto: BranchDto) {
     return this.prisma.tx(async (tx) => {
       const br = await createBranchWithDefaults(tx, a.businessId, { code: dto.code.toUpperCase(), name: dto.name, kind: dto.kind, phone: dto.phone, address: dto.address });
-      await this.audit.record(a, { action: "branch.created", entityType: "branch", entityId: br.id, summary: `Branch ${br.code} created with default locations and safe`, branchId: br.id }, tx);
+      const till = await ensureDefaultRegister(tx, a.businessId, br.id);
+      await this.audit.record(a, { action: "branch.created", entityType: "branch", entityId: br.id, summary: `Branch ${br.code} created with default locations, safe${till ? " and register R1 “Till 1”" : ""}`, branchId: br.id }, tx);
+      if (till) await this.markDefaultRegister(tx, a.businessId, br.id);
       return br;
     });
+  }
+
+  /** Remembers that a branch got its automatic till, so deleting that till never brings it back. */
+  private async markDefaultRegister(tx: any, businessId: string, branchId: string) {
+    const b = await tx.business.findUniqueOrThrow({ where: { id: businessId } });
+    const st = (b.settings as any) ?? {};
+    const done: string[] = st.default_register_branches ?? [];
+    if (!done.includes(branchId)) await tx.business.update({ where: { id: businessId }, data: { settings: { ...st, default_register_branches: [...done, branchId] } } });
   }
 
   /** Counts the business records that tie a branch to its history (a branch with any of these cannot be deleted). */

@@ -11,7 +11,7 @@ import { createPrismaClient, ensureRuntimeSecrets } from "@retail/db";
 async function main() {
   await ensureRuntimeSecrets(() => {});
   const { validatePasswordStrength } = await import("../modules/auth/auth.service");
-  const { createBranchWithDefaults, createUser, setupBusiness } = await import("./business-setup");
+  const { createBranchWithDefaults, createUser, ensureDefaultRegister, setupBusiness } = await import("./business-setup");
   const name = process.env.SETUP_BUSINESS_NAME?.trim();
   const email = process.env.SETUP_OWNER_EMAIL?.trim().toLowerCase();
   const password = process.env.SETUP_OWNER_PASSWORD ?? "";
@@ -25,6 +25,7 @@ async function main() {
     const business = await setupBusiness(db, { name, isDemo: false });
     await db.$transaction(async (tx) => {
       const branch = await createBranchWithDefaults(tx, business.id, { code: "MAIN", name: branchName, kind: "STORE" });
+      await ensureDefaultRegister(tx, business.id, branch.id); // "Till 1", editable or deletable later
       await createUser(tx, business.id, { email, name: "Owner", password, roles: ["OWNER"], branchIds: [branch.id], allBranches: true, mustChange: true });
     });
     console.log(`Business "${name}" created. Sign in as ${email} (password change required). Next: tax rates, branches, registers, users, products, opening stock.`);

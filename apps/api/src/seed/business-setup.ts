@@ -169,6 +169,16 @@ export async function createRegister(tx: Tx, businessId: string, branchId: strin
   return tx.cashRegister.create({ data: { business_id: businessId, branch_id: branchId, location_id: loc.id, code, name, till_account_id: fa.id } });
 }
 
+/**
+ * A shop branch needs a till to sell: creates "Till 1" (code R1) when a STORE branch has no register.
+ * It is an ordinary register — rename, deactivate or delete it like any other. Returns null if not needed.
+ */
+export async function ensureDefaultRegister(tx: Tx, businessId: string, branchId: string) {
+  const br = await tx.branch.findUniqueOrThrow({ where: { id: branchId } });
+  if (br.kind !== "STORE" || (await tx.cashRegister.count({ where: { branch_id: branchId } }))) return null;
+  return createRegister(tx, businessId, branchId, "R1", "Till 1");
+}
+
 export async function createUser(tx: Tx, businessId: string, u: { email: string; name: string; password: string; roles: string[]; branchIds: string[]; allBranches?: boolean; mustChange?: boolean }) {
   const roles = await tx.role.findMany({ where: { business_id: businessId, code: { in: u.roles } } });
   return tx.user.create({

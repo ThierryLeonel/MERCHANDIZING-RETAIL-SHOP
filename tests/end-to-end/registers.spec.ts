@@ -53,19 +53,23 @@ test.describe.serial("branches and registers", () => {
     await dlg.getByLabel("Code").fill("POPUP");
     await dlg.getByLabel("Name").fill("Pop-up stand");
     await dlg.getByRole("button", { name: "Create" }).click();
-    const row = page.locator("tr", { hasText: "Pop-up stand" });
+    const branches = page.locator("section", { hasText: "Branches and locations" });
+    const tills = page.locator("section", { hasText: "Cash registers" });
+    const row = branches.locator("tr", { hasText: "Pop-up stand" });
     await expect(row).toBeVisible();
+    // a shop branch gets its first till automatically
+    await expect(tills.locator("tr", { hasText: "Pop-up stand" }).filter({ hasText: "Till 1" })).toBeVisible();
 
     await row.getByRole("button", { name: "Edit branch" }).click();
     await page.getByRole("dialog").getByLabel("Name").fill("Pop-up kiosk");
     await page.getByRole("dialog").getByLabel("Phone").fill("699 00 00 00");
     await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-    const renamed = page.locator("tr", { hasText: "Pop-up kiosk" });
+    const renamed = branches.locator("tr", { hasText: "Pop-up kiosk" });
     await expect(renamed).toBeVisible();
 
     await renamed.getByRole("button", { name: "Delete branch" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
-    await expect(page.locator("tr", { hasText: "Pop-up kiosk" })).toHaveCount(0);
+    await expect(page.locator("tr", { hasText: "Pop-up kiosk" })).toHaveCount(0); // its unused till goes with it
 
     // the demo's first branch has sales history
     await page.locator("tbody").first().locator("tr").first().getByRole("button", { name: "Delete branch" }).click();

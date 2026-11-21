@@ -46,6 +46,8 @@ Verified = covered by automated tests that passed in this session (see "Commands
 - Category deactivation now works at the till: products of an inactive category (or inside an inactive parent) are not offered, barcode lookup says why, and checkout refuses them (`CATEGORY_INACTIVE`); one-click Activate/Deactivate in Catalogue setup. Till searches are always re-checked (no 15 s cache).
 - Fix: the phone menu drawer now scrolls when its items are taller than the screen.
 
+- Automatic register: every shop (STORE) branch gets an ordinary register R1 “Till 1” — at production setup, when a store branch is created, and once at API start for existing store branches that have none (remembered in `businesses.settings.default_register_branches`, so a deleted till is not recreated; demo businesses skipped). Rename, change location, deactivate or delete it like any register (`ensureDefaultRegister` in seed/business-setup.ts). Verified: fresh production setup → MAIN has R1 “Till 1”; API 77/77, e2e 23/23.
+
 Session 7 verification: `pnpm test` **75/75** (adds built-in install/idempotence/re-add, starting stock with prices, inactive-category refusal, role rights), `pnpm test:e2e` **23/23** (built-in catalogue → starting stock → till → deactivate category; layout-fit now covers Starting stock and Catalogue setup), drift check clean, lint clean, build OK.
 
 Session 6 verification: `pnpm test` **71/71** (adds branch edit/delete incl. trigger refusal of other audit updates), `pnpm test:e2e` **23/23** (adds layout-fit at two widths, key-by-key typing focus check, branch create/edit/delete with refusal for a branch with sales, phone-viewport drawer/no-sideways-scroll/dialog fit), drift check clean, lint clean, build OK.

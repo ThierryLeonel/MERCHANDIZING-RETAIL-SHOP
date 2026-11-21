@@ -5,6 +5,7 @@ import { D } from "../../common/money";
 import { InventoryService } from "../inventory/inventory.service";
 import { AuditService } from "../../common/audit.service";
 import { PrismaService } from "../../common/prisma.service";
+import { ensureDefaultRegister } from "../../seed/business-setup";
 import { BUILTIN_CATEGORIES, BUILTIN_ITEMS, BUILTIN_UNITS, BUILTIN_VERSION, builtinSku } from "../../seed/builtin-catalogue.data";
 import { CatalogueService } from "./catalogue.service";
 
@@ -90,8 +91,36 @@ export class BuiltinCatalogueService {
     return res;
   }
 
+  /**
+   * At start-up, once per branch: every active shop branch of a real business that has no register
+   * gets "Till 1". Branches that already got one are remembered, so a till the owner deletes is not recreated.
+   */
+  async ensureDefaultRegisters(where: { id?: string; is_demo?: boolean } = { is_demo: false }) {
+    const businesses = await this.prisma.client.business.findMany({ where });
+    for (const biz of businesses) {
+      const done: string[] = (biz.settings as any)?.default_register_branches ?? [];
+      const branches = await this.prisma.client.branch.findMany({ where: { business_id: biz.id, kind: "STORE", active: true, id: { notIn: done } } });
+      if (!branches.length) continue;
+      const owner = await this.prisma.client.user.findFirst({ where: { business_id: biz.id, status: "ACTIVE", roles: { some: { role: { code: "OWNER" } } } }, orderBy: { created_at: "asc" } });
+      for (const br of branches) {
+        await this.prisma.tx(async (tx) => {
+          const reg = await ensureDefaultRegister(tx, biz.id, br.id);
+          const fresh = await tx.business.findUniqueOrThrow({ where: { id: biz.id } });
+          const st = (fresh.settings as any) ?? {};
+          await tx.business.update({ where: { id: biz.id }, data: { settings: { ...st, default_register_branches: [...(st.default_register_branches ?? []), br.id] } } });
+          if (reg && owner) {
+            const auth: AuthContext = { userId: owner.id, sessionId: "system", businessId: biz.id, fullName: "System", email: owner.email, permissions: new Set(), roles: ["OWNER"], allBranches: true, branchIds: [], defaultBranchId: null };
+            await this.audit.record(auth, { action: "register.created", entityType: "cash_register", entityId: reg.id, summary: `Register ${reg.code} “${reg.name}” created automatically at ${br.code} (the branch had none)`, branchId: br.id }, tx);
+          }
+          if (reg) this.log.log(`${biz.name}: register ${reg.code} “${reg.name}” created at ${br.code}`);
+        });
+      }
+    }
+  }
+
   /** At start-up: install once for every real (non-demo) business that has not had it yet. BUILTIN_CATALOGUE=off disables. */
   async installPending() {
+    await this.ensureDefaultRegisters().catch((e) => this.log.error(`Default registers: ${e?.message ?? e}`));
     if (process.env.BUILTIN_CATALOGUE === "off") return;
     const businesses = await this.prisma.client.business.findMany({ where: { is_demo: false } });
     for (const biz of businesses) {

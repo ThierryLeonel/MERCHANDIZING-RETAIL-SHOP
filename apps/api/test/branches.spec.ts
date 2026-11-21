@@ -1,4 +1,5 @@
 import { AdminController } from "../src/modules/admin/admin.controller";
+import { BuiltinCatalogueService } from "../src/modules/catalogue/builtin-catalogue.service";
 import { closeContext, makeWorld, World } from "./harness";
 
 let w: World;
@@ -50,5 +51,35 @@ describe("branches", () => {
 
     // an unused branch can be deactivated
     expect((await admin.updateBranch(w.owner, again.id, { active: false })).active).toBe(false);
+  });
+});
+
+describe("automatic register", () => {
+  it("a new shop branch gets “Till 1” (R1), a warehouse does not; it can be renamed and deleted", async () => {
+    const shop = await admin.createBranch(w.owner, { code: "AUTO1", name: "Auto shop", kind: "STORE" });
+    const till = await w.db.cashRegister.findFirstOrThrow({ where: { branch_id: shop.id } });
+    expect(till).toMatchObject({ code: "R1", name: "Till 1", active: true });
+    const renamed = await admin.updateRegister(w.owner, till.id, { name: "Front counter" });
+    expect(renamed.name).toBe("Front counter");
+    const wh = await admin.createBranch(w.owner, { code: "AUTOW", name: "Auto store room", kind: "WAREHOUSE" });
+    expect(await w.db.cashRegister.count({ where: { branch_id: wh.id } })).toBe(0);
+    await admin.deleteRegister(w.owner, till.id);
+    expect(await w.db.cashRegister.count({ where: { branch_id: shop.id } })).toBe(0);
+  });
+
+  it("at start-up, an existing shop branch without a register gets one — once; a deleted one is not recreated", async () => {
+    const builtin = w.app.get(BuiltinCatalogueService);
+    // a branch made before this feature: no register and not yet handled
+    const old = await w.db.branch.create({ data: { business_id: w.B, code: "OLD1", name: "Old shop", kind: "STORE" } });
+    await w.db.location.create({ data: { business_id: w.B, branch_id: old.id, code: "FLOOR", name: "Sales floor", kind: "SALES_FLOOR", is_sellable: true, is_default: true } });
+    await builtin.ensureDefaultRegisters({ id: w.B });
+    const till = await w.db.cashRegister.findFirstOrThrow({ where: { branch_id: old.id } });
+    expect(till).toMatchObject({ code: "R1", name: "Till 1" });
+    expect(await w.db.auditEvent.count({ where: { action: "register.created", entity_id: till.id } })).toBe(1);
+    await admin.deleteRegister(w.owner, till.id);
+    await builtin.ensureDefaultRegisters({ id: w.B });
+    expect(await w.db.cashRegister.count({ where: { branch_id: old.id } })).toBe(0);
+    // branches that already had registers keep exactly what they had
+    expect(await w.db.cashRegister.count({ where: { branch_id: w.s1.id, code: "R1" } })).toBeLessThanOrEqual(1);
   });
 });
