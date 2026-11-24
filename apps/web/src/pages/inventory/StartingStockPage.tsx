@@ -2,12 +2,13 @@ import { Save } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Badge, Button, Card, DataTable, ErrorText, Input, PageHeader, Pagination, SearchInput, Select, useToast } from "../../components/ui";
+import { ProductImage } from "../../components/ProductImage";
 import { api } from "../../lib/api";
 import { money } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
 
-interface Row { variant_id: string; sku: string; name: string; retail_price: string; min_price: string | null; category: string | null; category_active: boolean | null; unit: string; suggested_qty: string | null }
+interface Row { image_attachment_id: string | null; variant_id: string; sku: string; name: string; retail_price: string; min_price: string | null; category: string | null; category_active: boolean | null; unit: string; suggested_qty: string | null }
 type Edit = { quantity?: string; unit_cost?: string; retail_price?: string };
 
 const PAGE = 50;
@@ -107,12 +108,12 @@ export default function StartingStockPage() {
         <DataTable rowKey="variant_id" rows={pageRows} loading={q.isLoading} error={q.error} onRetry={q.refetch}
           empty={show === "counted" ? "No counted products waiting — everything counted is stocked. Choose “All products” to stock others." : "No products here."}
           columns={[
-            { key: "name", header: "Product", render: (r: Row) => <div className="min-w-[12rem]"><div className="font-medium text-slate-900">{r.name}</div><div className="text-xs text-slate-500">{r.sku} · {r.category ?? "No category"}{r.category_active === false && <> · <Badge>Category inactive</Badge></>}</div></div> },
+            { key: "name", header: "Product", render: (r: Row) => <div className="flex min-w-[14rem] items-center gap-3"><ProductImage attachmentId={r.image_attachment_id} name={r.name} category={r.category} showName={false} className="h-10 w-10 shrink-0" /><div className="min-w-0"><div className="font-medium text-slate-900">{r.name}</div><div className="text-xs text-slate-500">{r.sku} · {r.category ?? "No category"}{r.category_active === false && <> · <Badge>Category inactive</Badge></>}</div></div></div> },
             { key: "unit", header: "Unit", render: (r: Row) => r.unit },
             { key: "qty", header: "Quantity", render: (r: Row) => <Input aria-label={`Quantity of ${r.name}`} inputMode="decimal" className="h-9 w-24" value={qtyOf(r)} onChange={(e) => set(r.variant_id, "quantity", e.target.value)} /> },
             { key: "cost", header: "Buying price (each)", render: (r: Row) => <Input aria-label={`Buying price of ${r.name}`} inputMode="decimal" className="h-9 w-32" placeholder="XAF" value={edits[r.variant_id]?.unit_cost ?? ""} onChange={(e) => set(r.variant_id, "unit_cost", e.target.value)} aria-invalid={!!(num(qtyOf(r)) && edits[r.variant_id]?.unit_cost === "")} /> },
             { key: "price", header: "Selling price", render: (r: Row) => canPrice
-              ? <div className="flex items-center gap-2"><Input aria-label={`Selling price of ${r.name}`} inputMode="decimal" className="h-9 w-32" placeholder={Number(r.retail_price) > 0 ? String(Number(r.retail_price)) : "XAF"} value={edits[r.variant_id]?.retail_price ?? ""} onChange={(e) => set(r.variant_id, "retail_price", e.target.value)} />{Number(r.retail_price) <= 0 && !edits[r.variant_id]?.retail_price && <Badge tone="amber">Not set</Badge>}</div>
+              ? <div className="flex items-center gap-2"><Input aria-label={`Selling price of ${r.name}`} inputMode="decimal" className="h-9 w-32" placeholder={Number(r.retail_price) > 0 ? String(Number(r.retail_price)) : "XAF"} value={edits[r.variant_id]?.retail_price ?? ""} onChange={(e) => set(r.variant_id, "retail_price", e.target.value)} />{Number(r.retail_price) <= 0 && !edits[r.variant_id]?.retail_price && <span className="shrink-0"><Badge tone="amber">Not set</Badge></span>}</div>
               : (Number(r.retail_price) > 0 ? money(r.retail_price) : <Badge tone="amber">Not set</Badge>) },
             { key: "value", header: "Value", align: "right", render: (r: Row) => { const v = (num(qtyOf(r)) ?? 0) * (num(edits[r.variant_id]?.unit_cost) ?? 0); return v ? money(v) : "—"; } },
           ]} />

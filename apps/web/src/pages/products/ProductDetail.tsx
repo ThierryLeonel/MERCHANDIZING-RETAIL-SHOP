@@ -1,22 +1,13 @@
-import { ImagePlus, Package } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ImagePlus } from "lucide-react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorState, ErrorText, Field, Input, Modal, PageHeader, Spinner, Status, useToast } from "../../components/ui";
-import { api, getAccessToken } from "../../lib/api";
+import { api } from "../../lib/api";
 import { humanize, money, qty } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
 import { useSession } from "../../lib/session";
+import { ProductImage } from "../../components/ProductImage";
 
-export function ProductImage({ attachmentId, className = "h-24 w-24" }: { attachmentId: string | null; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!attachmentId) return;
-    let revoked: string | null = null;
-    fetch(`/api/v1/attachments/${attachmentId}`, { headers: { Authorization: `Bearer ${getAccessToken()}` } }).then(async (r) => { if (r.ok) { revoked = URL.createObjectURL(await r.blob()); setUrl(revoked); } });
-    return () => { if (revoked) URL.revokeObjectURL(revoked); };
-  }, [attachmentId]);
-  return url ? <img src={url} alt="" className={`${className} rounded-md object-cover`} /> : <div className={`${className} flex items-center justify-center rounded-md bg-slate-100 text-slate-400`} aria-hidden><Package className="h-8 w-8" /></div>;
-}
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -38,7 +29,7 @@ export default function ProductDetail() {
   const upload = async (f: File) => {
     setUploadErr(null);
     const fd = new FormData(); fd.append("file", f);
-    try { await api(`/attachments?owner_type=product&owner_id=${p.id}`, { body: fd }); toast("Image uploaded"); refetch(); } catch (e) { setUploadErr(e); }
+    try { await api(`/attachments?owner_type=product&owner_id=${p.id}`, { body: fd }); toast("Photo uploaded"); refetch(); } catch (e) { setUploadErr(e); }
   };
   return (
     <div className="space-y-5">
@@ -51,7 +42,7 @@ export default function ProductDetail() {
         onClose={() => setDeleting(false)} onConfirm={async () => { await api(`/products/${p.id}`, { method: "DELETE" }); toast(`${p.name} deleted`); navigate("/products"); }} />
       <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
         <Card>
-          <ProductImage attachmentId={p.image_attachment_id} className="h-44 w-full" />
+          <ProductImage attachmentId={p.image_attachment_id} name={p.name} category={p.category_name} className="h-44 w-full" />
           {can("products.manage") && (
             <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 p-2 text-sm text-slate-600 hover:bg-slate-50">
               <ImagePlus className="h-4 w-4" /> Upload image<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />

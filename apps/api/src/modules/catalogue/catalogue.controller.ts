@@ -131,6 +131,13 @@ class PriceQuoteQuery {
 export class CatalogueController {
   constructor(private svc: CatalogueService, private prisma: PrismaService, private pricing: PricingService, private audit: AuditService, private builtin: BuiltinCatalogueService) {}
 
+  /** Every product's id, code, name and SKUs — for matching photo file names to products. */
+  @Get("catalogue/product-index") @RequirePermissions("products.manage")
+  async productIndex(@Auth() a: AuthContext) {
+    const ps = await this.prisma.client.product.findMany({ where: { business_id: a.businessId }, select: { id: true, code: true, name: true, image_attachment_id: true, variants: { select: { sku: true } } }, orderBy: { name: "asc" } });
+    return ps.map((p) => ({ id: p.id, code: p.code, name: p.name, has_photo: !!p.image_attachment_id, skus: p.variants.map((v) => v.sku) }));
+  }
+
   /** The shop's built-in catalogue: how many of its items exist now. */
   @Get("catalogue/builtin") @RequirePermissions("products.view")
   builtinStatus(@Auth() a: AuthContext) { return this.builtin.status(a.businessId); }

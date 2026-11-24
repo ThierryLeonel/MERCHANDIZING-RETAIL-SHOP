@@ -215,6 +215,7 @@ export class CatalogueService {
     return {
       ...p,
       base_unit_code: unitCode(p.base_unit_id),
+      category_name: p.category_id ? (await this.prisma.client.category.findUnique({ where: { id: p.category_id }, select: { name: true } }))?.name ?? null : null,
       can_view_cost: can(auth, "products.view_cost"),
       variants: p.variants.map((v) => ({
         ...v,
@@ -323,6 +324,7 @@ export class CatalogueService {
       GROUP BY sb.variant_id`;
     const units = await this.prisma.client.unit.findMany({ where: { business_id: auth.businessId } });
     const taxRates = await this.prisma.client.taxRate.findMany({ where: { business_id: auth.businessId } });
+    const cats = new Map((await this.prisma.client.category.findMany({ where: { business_id: auth.businessId }, select: { id: true, name: true } })).map((c) => [c.id, c.name]));
     const out = [];
     for (const v of variants) {
       const price = await this.pricing.resolve(this.prisma.client as unknown as Tx, { businessId: auth.businessId, branchId: opts.branchId, variantId: v.id, kind: "RETAIL" });
@@ -335,6 +337,7 @@ export class CatalogueService {
         tax_percent: tax?.rate_percent.toString() ?? "0", tax_code: tax?.code ?? null,
         available: v.product.product_type === "NON_STOCK" ? null : (avail.find((a) => a.variant_id === v.id)?.available ?? "0"),
         image_attachment_id: v.product.image_attachment_id,
+        category_name: v.product.category_id ? cats.get(v.product.category_id) ?? null : null,
         sell_units: v.unit_conversions.filter((c) => c.is_sellable).map((c) => ({ unit_id: c.unit_id, unit_code: units.find((u) => u.id === c.unit_id)?.code, factor: c.factor.toString() })),
       });
     }

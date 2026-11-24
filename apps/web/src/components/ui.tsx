@@ -25,10 +25,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 
 // ----------------------------------------------------------------- inputs
 const inputCls = "block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-base shadow-xs transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-600/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 aria-[invalid=true]:border-red-500 sm:text-sm";
-export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => <input ref={ref} className={cx(inputCls, "h-10", className)} {...p} />);
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => <textarea ref={ref} className={cx(inputCls, "py-2", className)} {...p} />);
+/** A width given by the caller (w-40, sm:w-56…) replaces the default full width instead of fighting it. */
+const base = (className?: string) => (/(^|\s)w-/.test(className ?? "") ? inputCls.replace("block w-full", "block") : inputCls);
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => <input ref={ref} className={cx(base(className), "h-10", className)} {...p} />);
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => <textarea ref={ref} className={cx(base(className), "py-2", className)} {...p} />);
 /** Native select (best on phones and with scanners/keyboards) with a soft custom chevron. */
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, children, ...p }, ref) => <select ref={ref} className={cx(inputCls, "select-soft h-10 cursor-pointer appearance-none pr-9", className)} {...p}>{children}</select>);
+export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, children, ...p }, ref) => <select ref={ref} className={cx(base(className), "select-soft h-10 cursor-pointer appearance-none pr-9", className)} {...p}>{children}</select>);
 
 /** Label + control + hint/error, wired with ids for accessibility. */
 export function Field({ label, error, hint, children, required, className }: { label: string; error?: string | null; hint?: string; children: (id: string, describedBy?: string) => ReactNode; required?: boolean; className?: string }) {

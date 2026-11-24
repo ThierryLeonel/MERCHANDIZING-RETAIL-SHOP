@@ -158,8 +158,8 @@ export class BuiltinCatalogueService {
    */
   async startingStock(auth: AuthContext, branchId: string) {
     assertBranch(auth, branchId);
-    const rows = await this.prisma.client.$queryRaw<{ variant_id: string; sku: string; name: string; retail_price: string; min_price: string | null; category: string | null; category_active: boolean | null; unit: string; product_type: string; stocked_elsewhere: boolean }[]>`
-      SELECT v.id AS variant_id, v.sku, v.name, v.retail_price::text AS retail_price, v.min_price::text AS min_price,
+    const rows = await this.prisma.client.$queryRaw<{ variant_id: string; image_attachment_id: string | null; sku: string; name: string; retail_price: string; min_price: string | null; category: string | null; category_active: boolean | null; unit: string; product_type: string; stocked_elsewhere: boolean }[]>`
+      SELECT v.id AS variant_id, p.image_attachment_id, v.sku, v.name, v.retail_price::text AS retail_price, v.min_price::text AS min_price,
              c.name AS category, c.active AS category_active, u.code AS unit, p.product_type::text AS product_type,
              EXISTS (SELECT 1 FROM stock_movements m WHERE m.variant_id = v.id) AS stocked_elsewhere
         FROM product_variants v

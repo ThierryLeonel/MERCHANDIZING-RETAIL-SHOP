@@ -7,6 +7,7 @@ import { printReceipt } from "../../components/print";
 import { api, ApiError, newIdempotencyKey, qs } from "../../lib/api";
 import { humanize, money, qty, sumStrings } from "../../lib/format";
 import { useApi } from "../../lib/hooks";
+import { ProductImage } from "../../components/ProductImage";
 import { useSession } from "../../lib/session";
 import { Receipt } from "./Receipt";
 
@@ -167,7 +168,8 @@ function Terminal({ sessionInfo, reloadSession }: { sessionInfo: any; reloadSess
         <div className="max-h-[55dvh] min-h-0 flex-1 overflow-y-auto overscroll-contain lg:max-h-none">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
             {(search.length >= 2 ? results.data : shortcuts.data)?.map((p) => (
-              <button key={p.variant_id} onClick={() => addItem(p)} className="flex min-h-24 flex-col justify-between rounded-lg border border-slate-200 bg-white p-3 text-left shadow-xs hover:border-brand-600 hover:shadow-sm active:scale-[.99]">
+              <button key={p.variant_id} onClick={() => addItem(p)} className="flex min-h-24 flex-col justify-between rounded-lg border border-slate-200 bg-white p-2.5 text-left shadow-xs transition-all hover:border-brand-600 hover:shadow-sm active:scale-[.99]">
+                <ProductImage attachmentId={p.image_attachment_id} name={p.name} category={p.category_name} showName={false} className="mb-2 h-16 w-full sm:h-20" />
                 <div className="line-clamp-2 text-sm font-medium">{p.name}</div>
                 {(p.negotiable_price || p.product_type === "BULK") && <div className="mt-1 flex gap-1">{p.product_type === "BULK" && <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-800">per {p.base_unit_code}</span>}{p.negotiable_price && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">Bargain</span>}</div>}
                 <div className="mt-2 flex items-end justify-between gap-2">

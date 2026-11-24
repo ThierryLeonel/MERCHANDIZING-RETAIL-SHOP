@@ -50,6 +50,25 @@ test.describe.serial("built-in catalogue, imports and voids", () => {
     await expect(page.getByText("“Household / Home” is active again")).toBeVisible();
   });
 
+  test("products show a picture; the owner uploads photos in bulk, matched by file name", async ({ browser }) => {
+    const page = await as(browser, "owner@mboa.demo");
+    await page.goto("/products?category_id=");
+    await page.getByPlaceholder(/Search/).first().fill("Hand Fans");
+    await expect(page.getByRole("img", { name: "Hand Fans (illustration)" })).toBeVisible();
+    // a 2×2 PNG
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==", "base64");
+    await page.getByRole("button", { name: "Upload photos" }).click();
+    const dlg = page.getByRole("dialog", { name: "Upload product photos" });
+    await expect(dlg.getByLabel("Choose photos")).toBeEnabled();
+    await dlg.getByLabel("Choose photos").setInputFiles([{ name: "HOME-001.png", mimeType: "image/png", buffer: png }, { name: "IMG_0001.png", mimeType: "image/png", buffer: png }]);
+    await expect(dlg.getByLabel("Product for HOME-001.png")).toHaveValue(/.+/);
+    await expect(dlg.getByLabel("Product for IMG_0001.png")).toHaveValue("");
+    await dlg.getByRole("button", { name: "Upload 1 photo" }).click();
+    await expect(dlg.getByText("Uploaded", { exact: true })).toBeVisible();
+    await dlg.getByRole("button", { name: "Close" }).first().click();
+    await expect(page.getByRole("img", { name: "Hand Fans", exact: true })).toBeVisible();
+  });
+
   test("owner imports customers from a CSV file (semicolon-separated, French headers)", async ({ browser }) => {
     const page = await as(browser, "owner@mboa.demo");
     await page.goto("/import?type=customers");
