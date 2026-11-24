@@ -76,7 +76,7 @@ export default function ReturnsPage() {
             {method !== "CASH" && method !== "CUSTOMER_CREDIT" && (
               <div className="space-y-2">
                 <Field label="Paid from">{(id) => <Select id={id} value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Select…</option>{accounts.data?.filter((a) => a.kind !== "TILL").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}</Field>
-                <Field label="Refund reference">{(id) => <Input id={id} value={reference} onChange={(e) => setReference(e.target.value)} />}</Field>
+                <Field label="Refund reference (optional)">{(id) => <Input id={id} value={reference} onChange={(e) => setReference(e.target.value)} />}</Field>
               </div>
             )}
           </div>

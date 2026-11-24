@@ -27,6 +27,8 @@ import { AuthController } from "./modules/auth/auth.controller";
 import { AuthService } from "./modules/auth/auth.service";
 import { CatalogueController } from "./modules/catalogue/catalogue.controller";
 import { CatalogueService } from "./modules/catalogue/catalogue.service";
+import { DeclarationsController } from "./modules/declarations/declarations.controller";
+import { DeclarationsService } from "./modules/declarations/declarations.service";
 import { BuiltinCatalogueService } from "./modules/catalogue/builtin-catalogue.service";
 import { PricingService } from "./modules/catalogue/pricing.service";
 import { CustomersController } from "./modules/customers/customers.controller";
@@ -49,7 +51,7 @@ import { SystemController } from "./modules/system/system.controller";
 export const SERVICES = [
   PrismaService, AuditService, SequenceService, SettingsService, PostingService, ApprovalsService, StockLedgerService, PricingService,
   AuthService, CatalogueService, PurchasingService, InventoryService, SalesService, FinanceService, CustomersService, AccountingService,
-  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService, OpeningBalanceService, BuiltinCatalogueService,
+  ReportsService, SimulatorMobileMoneyAdapter, PaymentAdapterRegistry, LocalStorageAdapter, ImportService, ChartService, MaintenanceService, OpeningBalanceService, BuiltinCatalogueService, DeclarationsService,
 ];
 
 @Module({
@@ -59,7 +61,7 @@ export const SERVICES = [
   ],
   controllers: [
     AuthController, CatalogueController, PurchasingController, InventoryController, SalesController, FinanceController, CustomersController,
-    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController, DataController, OpeningBalanceController,
+    AccountingController, ReportsController, AdminController, ApprovalsController, SystemController, DataController, OpeningBalanceController, DeclarationsController,
   ],
   providers: [
     ...SERVICES,

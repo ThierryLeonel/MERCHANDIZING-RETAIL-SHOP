@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from "class-validator";
 import { randomUUID } from "node:crypto";
-import { Auth, AuthContext, Public, RequirePermissions } from "../../common/auth-context";
+import { assertBranch, Auth, AuthContext, Public, RequirePermissions } from "../../common/auth-context";
 import { DomainError, notFound } from "../../common/errors";
 import { Idempotent } from "../../common/idempotency";
 import { PageQuery } from "../../common/pagination";
@@ -32,6 +32,7 @@ class PaymentDto {
   @IsOptional() @IsUUID() financial_account_id?: string;
   @IsOptional() @IsString() payer_phone?: string;
   @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsBoolean() received?: boolean;
   @IsOptional() @IsUUID() approval_request_id?: string;
 }
 class CheckoutDto {
@@ -67,7 +68,7 @@ class ReturnDto {
   @IsOptional() @IsUUID() approval_request_id?: string;
   @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => ReturnLineDto) lines: ReturnLineDto[];
 }
-class ConfirmDto { @IsString() @MinLength(3) reference: string }
+class ConfirmDto { @IsOptional() @IsString() reference?: string }
 class ReasonDto { @IsString() @MinLength(3) reason: string }
 class VoidSaleDto {
   @IsString() @MinLength(3) reason: string;
@@ -136,6 +137,16 @@ export class SalesController {
   /** Administrator void: full reversal (stock back, refund) — the sale stays on record, marked voided. */
   @Post("sales/:id/void") @HttpCode(200) @RequirePermissions("transactions.void")
   voidSale(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: VoidSaleDto) { return this.svc.voidSale(a, id, dto); }
+
+  /** Accounts a cashier can collect electronic payments into at a branch (each mobile money wallet, bank account, card clearing). */
+  @Get("pos/collection-accounts") @RequirePermissions("pos.sell")
+  collectionAccounts(@Auth() a: AuthContext, @Query("branch_id", ParseUUIDPipe) branchId: string) {
+    assertBranch(a, branchId);
+    return this.prisma.client.financialAccount.findMany({
+      where: { business_id: a.businessId, active: true, kind: { in: ["MOBILE_MONEY", "BANK", "CLEARING"] }, OR: [{ branch_id: null }, { branch_id: branchId }] },
+      select: { id: true, code: true, name: true, kind: true }, orderBy: [{ kind: "asc" }, { name: "asc" }],
+    });
+  }
 
   @Post("payments/:id/confirm") @HttpCode(200) @RequirePermissions("pos.confirm_payment")
   confirm(@Auth() a: AuthContext, @Param("id", ParseUUIDPipe) id: string, @Body() dto: ConfirmDto) { return this.svc.confirmPayment(a, id, dto.reference); }

@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   { code: "sessions.cash_drop", module: "sessions", description: "Record cash drops to the safe" },
   { code: "sessions.paid_out", module: "sessions", description: "Record paid-outs from the till", sensitive: true },
   { code: "sessions.view_all", module: "sessions", description: "View all cashier sessions" },
+  { code: "declarations.view", module: "sessions", description: "See everyone's daily opening/closing balance declarations with system balances and variances", sensitive: true },
   { code: "products.view", module: "products", description: "View catalogue" },
   { code: "products.manage", module: "products", description: "Create and edit products" },
   { code: "products.view_cost", module: "products", description: "See cost prices and margins", sensitive: true },
@@ -79,7 +80,7 @@ export const DEFAULT_ROLES: Record<string, { name: string; description: string; 
     description: "Runs a branch; approves operational exceptions",
     permissions: [
       "dashboard.view", "pos.sell", "pos.hold", "pos.discount", "pos.price_override", "pos.credit_sale", "pos.return", "pos.confirm_payment",
-      "sessions.open", "sessions.close", "sessions.cash_drop", "sessions.paid_out", "sessions.view_all",
+      "sessions.open", "sessions.close", "sessions.cash_drop", "sessions.paid_out", "sessions.view_all", "declarations.view",
       "products.view", "products.view_cost", "prices.manage",
       "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.count",
       "purchasing.view", "purchasing.manage", "purchasing.receive", "suppliers.view", "suppliers.manage",
@@ -93,6 +94,11 @@ export const DEFAULT_ROLES: Record<string, { name: string; description: string; 
     name: "Cashier",
     description: "Operates the POS",
     permissions: ["dashboard.view", "pos.sell", "pos.hold", "pos.discount", "sessions.open", "sessions.close", "sessions.cash_drop", "products.view", "customers.view", "customers.manage"],
+  },
+  SALES_PERSON: {
+    name: "Sales Person",
+    description: "Serves customers, looks up products and stock, prepares carts for the cashier",
+    permissions: ["dashboard.view", "pos.hold", "products.view", "inventory.view", "customers.view"],
   },
   PURCHASING_OFFICER: {
     name: "Purchasing Officer",
@@ -110,7 +116,7 @@ export const DEFAULT_ROLES: Record<string, { name: string; description: string; 
     permissions: [
       "dashboard.view", "accounting.view", "accounting.journal", "accounting.periods", "finance.view", "finance.manage", "expenses.manage",
       "payables.manage", "suppliers.view", "customers.view", "customers.credit", "products.view", "products.view_cost", "inventory.view",
-      "purchasing.view", "sessions.view_all", "reports.view", "reports.financial", "approvals.view", "approve.journal", "approve.period_reopen",
+      "purchasing.view", "sessions.view_all", "declarations.view", "reports.view", "reports.financial", "approvals.view", "approve.journal", "approve.period_reopen",
     ],
   },
   SYSTEM_ADMIN: {

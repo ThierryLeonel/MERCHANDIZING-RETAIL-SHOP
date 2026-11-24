@@ -5,7 +5,7 @@ import { D } from "../../common/money";
 import { InventoryService } from "../inventory/inventory.service";
 import { AuditService } from "../../common/audit.service";
 import { PrismaService } from "../../common/prisma.service";
-import { ensureDefaultRegister } from "../../seed/business-setup";
+import { ensureDefaultRegister, ensureOrangeMoneyWallet } from "../../seed/business-setup";
 import { BUILTIN_CATEGORIES, BUILTIN_ITEMS, BUILTIN_UNITS, BUILTIN_VERSION, builtinSku } from "../../seed/builtin-catalogue.data";
 import { CatalogueService } from "./catalogue.service";
 
@@ -119,7 +119,21 @@ export class BuiltinCatalogueService {
   }
 
   /** At start-up: install once for every real (non-demo) business that has not had it yet. BUILTIN_CATALOGUE=off disables. */
+  /** Once per real business: an Orange Money wallet to collect into (skipped if one exists; a deleted one is not recreated). */
+  async ensureOrangeWallets(where: { id?: string; is_demo?: boolean } = { is_demo: false }) {
+    for (const biz of await this.prisma.client.business.findMany({ where })) {
+      if ((biz.settings as any)?.orange_wallet_checked) continue;
+      await this.prisma.tx(async (tx) => {
+        const fa = await ensureOrangeMoneyWallet(tx, biz.id);
+        const fresh = await tx.business.findUniqueOrThrow({ where: { id: biz.id } });
+        await tx.business.update({ where: { id: biz.id }, data: { settings: { ...((fresh.settings as object) ?? {}), orange_wallet_checked: true } } });
+        if (fa) this.log.log(`${biz.name}: financial account ${fa.code} “${fa.name}” added`);
+      });
+    }
+  }
+
   async installPending() {
+    await this.ensureOrangeWallets().catch((e) => this.log.error(`Orange Money wallet: ${e?.message ?? e}`));
     await this.ensureDefaultRegisters().catch((e) => this.log.error(`Default registers: ${e?.message ?? e}`));
     if (process.env.BUILTIN_CATALOGUE === "off") return;
     const businesses = await this.prisma.client.business.findMany({ where: { is_demo: false } });

@@ -35,7 +35,9 @@ export interface CheckoutPayment {
   amount_tendered?: string | number;
   financial_account_id?: string;
   payer_phone?: string;
-  reference?: string; // manual confirmation reference (terminal approval code, transfer ref)
+  reference?: string; // optional: terminal approval code, transfer reference
+  /** Electronic payment the cashier has seen arrive (mobile money, Orange Money, bank, card): completes the sale; reference and phone stay optional. */
+  received?: boolean;
   approval_request_id?: string; // credit exception
 }
 export interface CheckoutInput {
@@ -248,12 +250,16 @@ export class SalesService {
           chg = tendered.minus(amount);
           change = change.plus(chg);
         }
-        const accountId = p.financial_account_id ?? (await this.defaultAccount(tx, auth.businessId, input.branch_id, p.method, register.till_account_id));
-        let confirmed = p.method === "CASH";
-        if (ELECTRONIC.includes(p.method) && p.reference?.trim()) {
-          assertCan(auth, "pos.confirm_payment", "Confirming electronic payments manually requires pos.confirm_payment");
-          confirmed = true;
+        if (p.financial_account_id && p.method !== "CASH") {
+          const kinds = p.method === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : p.method === "CARD" ? ["CLEARING", "BANK"] : ["BANK", "MOBILE_MONEY"];
+          const fa = await tx.financialAccount.findFirst({ where: { id: p.financial_account_id, business_id: auth.businessId, active: true, kind: { in: kinds as any }, OR: [{ branch_id: null }, { branch_id: input.branch_id }] } });
+          if (!fa) throw invalid("INVALID_COLLECTION_ACCOUNT", "Choose an active collection account of this branch for this payment method");
         }
+        const accountId = p.method === "CASH" ? register.till_account_id : p.financial_account_id ?? (await this.defaultAccount(tx, auth.businessId, input.branch_id, p.method, register.till_account_id));
+        let confirmed = p.method === "CASH";
+        // The cashier confirms an electronic payment they have seen arrive; a reference or phone number is optional.
+        // Without "received" (and without a reference) it waits for the provider or an authorised confirmation as before.
+        if (ELECTRONIC.includes(p.method) && (p.received === true || p.reference?.trim())) confirmed = true;
         const provider = p.method === "MOBILE_MONEY" && !confirmed ? this.adapters.defaultProvider() : null;
         // Without a provider adapter, mobile money also waits for authorised manual confirmation.
         // Card / bank transfer without a confirmed reference stay PENDING until an authorised user confirms them.
@@ -293,7 +299,7 @@ export class SalesService {
         });
         if (!p.confirmed && p.provider) await this.startAttempt(tx, pay.id, p.provider, auth.businessId, p.amount, b.currency_code, p.phone);
         if (p.confirmed && ELECTRONIC.includes(p.method)) {
-          await this.audit.record(auth, { action: "payment.manually_confirmed", entityType: "payment", entityId: pay.id, summary: `${p.method} ${p.amount} confirmed manually, ref ${p.reference}`, branchId: input.branch_id }, tx);
+          await this.audit.record(auth, { action: "payment.manually_confirmed", entityType: "payment", entityId: pay.id, summary: `${p.method} ${p.amount} confirmed as received at the till${p.reference ? `, ref ${p.reference}` : " (no reference)"}${p.phone ? `, phone ${p.phone}` : ""}`, branchId: input.branch_id }, tx);
         }
       }
       if (allConfirmed) {
@@ -402,17 +408,17 @@ export class SalesService {
 
   // ------------------------------------------------- payment state machine ----
   /** Authorised manual confirmation of a pending electronic payment. */
-  async confirmPayment(auth: AuthContext, paymentId: string, reference: string) {
+  async confirmPayment(auth: AuthContext, paymentId: string, reference?: string | null) {
     assertCan(auth, "pos.confirm_payment");
-    if (!reference?.trim()) throw invalid("REFERENCE_REQUIRED", "A payment reference is required");
+    reference = reference?.trim() || null; // optional: not every mobile money / bank receipt has one at hand
     const b = await this.settings.business(auth.businessId);
     await this.prisma.tx(async (tx) => {
       const p = await this.lockPayment(tx, auth.businessId, paymentId);
       assertBranch(auth, p.branch_id);
       if (p.status !== "PENDING") throw conflict("PAYMENT_NOT_PENDING", `Payment is ${p.status.toLowerCase()}`);
-      await tx.payment.update({ where: { id: p.id }, data: { status: "CONFIRMED", confirmation_mode: "MANUAL", provider_reference: reference.trim(), confirmed_by_id: auth.userId, confirmed_at: new Date() } });
+      await tx.payment.update({ where: { id: p.id }, data: { status: "CONFIRMED", confirmation_mode: "MANUAL", provider_reference: reference ?? p.provider_reference ?? null, confirmed_by_id: auth.userId, confirmed_at: new Date() } });
       await tx.paymentAttempt.updateMany({ where: { payment_id: p.id, status: "PENDING" }, data: { status: "CANCELLED", last_error: "Superseded by manual confirmation" } });
-      await this.audit.record(auth, { action: "payment.manually_confirmed", entityType: "payment", entityId: p.id, summary: `${p.method} ${p.amount} confirmed manually, ref ${reference}`, branchId: p.branch_id }, tx);
+      await this.audit.record(auth, { action: "payment.manually_confirmed", entityType: "payment", entityId: p.id, summary: `${p.method} ${p.amount} confirmed manually${reference ? `, ref ${reference}` : " (no reference)"}`, branchId: p.branch_id }, tx);
       if (p.sale_id) await this.finalizeIfPaid(tx, b, p.sale_id, auth.userId);
     });
     return this.prisma.client.payment.findUnique({ where: { id: paymentId } });
@@ -644,7 +650,6 @@ export class SalesService {
       } else {
         refundAccountId = input.financial_account_id ?? null;
         if (!refundAccountId) throw invalid("ACCOUNT_REQUIRED", "Choose the account the refund is paid from");
-        if (!input.reference?.trim()) throw invalid("REFERENCE_REQUIRED", "Enter the refund transaction reference");
       }
       if (input.refund_method === "CUSTOMER_CREDIT") {
         const outstanding = D(sale.credit_amount).minus(sale.credit_settled);

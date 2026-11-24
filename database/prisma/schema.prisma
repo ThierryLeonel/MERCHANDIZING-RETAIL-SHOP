@@ -2051,3 +2051,35 @@ model CustomerOpeningAllocation {
 
   @@map("customer_opening_allocations")
 }
+
+/// Daily opening/closing balance declaration by a staff member (append-only, blind).
+model DailyDeclaration {
+  id             String   @id @default(uuid()) @db.Uuid
+  business_id    String   @db.Uuid
+  branch_id      String   @db.Uuid
+  user_id        String   @db.Uuid
+  business_date  DateTime @db.Date
+  kind           String   @db.VarChar(16)
+  total_declared Decimal  @db.Decimal(18, 2)
+  note           String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  lines DailyDeclarationLine[]
+
+  @@unique([business_id, user_id, business_date, kind])
+  @@index([business_id, business_date])
+  @@map("daily_declarations")
+}
+
+model DailyDeclarationLine {
+  id                   String  @id @default(uuid()) @db.Uuid
+  declaration_id       String  @db.Uuid
+  financial_account_id String  @db.Uuid
+  declared_amount      Decimal @db.Decimal(18, 2)
+  system_balance       Decimal @db.Decimal(18, 2)
+
+  declaration DailyDeclaration @relation(fields: [declaration_id], references: [id])
+
+  @@unique([declaration_id, financial_account_id])
+  @@map("daily_declaration_lines")
+}

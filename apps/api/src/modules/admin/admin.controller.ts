@@ -149,7 +149,7 @@ export class AdminController {
       db.purchaseOrder.count({ where: w }), db.goodsReceipt.count({ where: w }), db.supplierInvoice.count({ where: w }), db.supplierPayment.count({ where: w }), db.purchaseReturn.count({ where: w }),
       db.stockMovement.count({ where: w }), db.stockTransfer.count({ where: { OR: [{ from_branch_id: id }, { to_branch_id: id }] } }), db.stockCount.count({ where: w }), db.stockAdjustment.count({ where: w }),
       db.cashierSession.count({ where: w }), db.journalEntry.count({ where: w }), db.journalLine.count({ where: w }), db.expense.count({ where: w }), db.approvalRequest.count({ where: w }),
-      db.priceList.count({ where: w }), db.promotion.count({ where: w }),
+      db.priceList.count({ where: w }), db.promotion.count({ where: w }), db.dailyDeclaration.count({ where: w }),
     ]);
     return counts.reduce((x, y) => x + y, 0);
   }

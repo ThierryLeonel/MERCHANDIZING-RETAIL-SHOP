@@ -146,7 +146,7 @@ function PayForm({ invoice, onClose, onDone }: { invoice: any; onClose: () => vo
         <Field label="Amount" hint={`Outstanding ${money(invoice.outstanding)}; any excess is recorded as a supplier advance`}>{(id, h) => <Input id={id} aria-describedby={h} value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
         <Field label="Paid from">{(id) => <Select id={id} value={acc} onChange={(e) => setAcc(e.target.value)}><option value="">Select…</option>{accounts.data?.filter((a) => a.kind !== "TILL").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}</Field>
         <Field label="Payment date">{(id) => <Input id={id} type="date" value={d} onChange={(e) => setD(e.target.value)} />}</Field>
-        <Field label="Reference">{(id) => <Input id={id} value={ref} onChange={(e) => setRef(e.target.value)} />}</Field>
+        <Field label="Reference (optional)">{(id) => <Input id={id} value={ref} onChange={(e) => setRef(e.target.value)} />}</Field>
       </div>
       <ErrorText error={err} />
     </Modal>

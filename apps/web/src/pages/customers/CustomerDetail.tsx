@@ -88,7 +88,7 @@ function PaymentForm({ customer, branchId, onClose, onDone }: { customer: any; b
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Amount">{(id) => <Input id={id} value={amount} onChange={(e) => { setAmount(e.target.value); autoAllocate(e.target.value); }} />}</Field>
         <Field label="Received into">{(id) => <Select id={id} value={acc} onChange={(e) => setAcc(e.target.value)}><option value="">Select…</option>{accounts.data?.filter((a) => a.kind !== "TILL").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}</Field>
-        <Field label="Reference">{(id) => <Input id={id} value={ref} onChange={(e) => setRef(e.target.value)} />}</Field>
+        <Field label="Reference (optional)">{(id) => <Input id={id} value={ref} onChange={(e) => setRef(e.target.value)} />}</Field>
       </div>
       <h3 className="mb-2 mt-4 text-sm font-semibold">Allocate to open invoices</h3>
       {customer.open_invoices.map((inv: any) => <div key={inv.id} className="mb-1 flex items-center gap-3 text-sm"><span className="w-40">{inv.number}</span><span className="w-32 text-slate-500">due {money(inv.outstanding)}</span><Input aria-label={`Allocate to ${inv.number}`} className="h-8 w-32" value={alloc[inv.id] ?? ""} onChange={(e) => setAlloc({ ...alloc, [inv.id]: e.target.value })} /></div>)}

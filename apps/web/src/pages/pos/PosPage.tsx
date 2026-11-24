@@ -16,7 +16,7 @@ interface CartLine {
   /** Agreed (bargained) or overridden unit price; the server re-validates it against the minimum price. */
   override_price?: string; negotiable?: boolean; bulk?: boolean;
 }
-interface Tender { method: string; amount: string; amount_tendered?: string; reference?: string; payer_phone?: string; approval_request_id?: string }
+interface Tender { method: string; amount: string; amount_tendered?: string; reference?: string; payer_phone?: string; approval_request_id?: string; financial_account_id?: string; label?: string; received?: boolean }
 
 export default function PosPage() {
   const { branchId, me } = useSession();
@@ -269,16 +269,22 @@ function PaymentModal({ quote, body, customer, onClose, onDone, onApprovedLine }
   const cash = tenders.find((t) => t.method === "CASH");
   const change = cash && cash.amount_tendered ? sumStrings([cash.amount_tendered, `-${cash.amount}`], decimals) : "0";
   const update = (i: number, patch: Partial<Tender>) => setTenders((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
-  const addTender = (method: string) => setTenders((ts) => [...ts, { method, amount: Number(remaining) > 0 ? remaining : "0" }]);
-  const methods = [
-    { m: "CASH", label: "Cash", icon: Banknote }, { m: "MOBILE_MONEY", label: "Mobile money", icon: Smartphone }, { m: "CARD", label: "Card", icon: CreditCard },
-    { m: "BANK_TRANSFER", label: "Bank transfer", icon: Wallet }, ...(customer && can("pos.credit_sale") ? [{ m: "CUSTOMER_CREDIT", label: "On account", icon: User }] : []),
+  const addTender = (method: string, account?: { id: string; name: string }) => setTenders((ts) => [...ts, { method, amount: Number(remaining) > 0 ? remaining : "0", ...(account ? { financial_account_id: account.id, label: account.name } : {}), ...(method !== "CASH" && method !== "CUSTOMER_CREDIT" ? { received: true } : {}) }]);
+  const accounts = useApi<{ id: string; name: string; kind: string }[]>(branchId ? `/pos/collection-accounts?branch_id=${branchId}` : null);
+  // one button per collection account: each mobile money wallet (MTN, Orange…), each bank account
+  const methods: { m: string; label: string; icon: any; account?: { id: string; name: string } }[] = [
+    { m: "CASH", label: "Cash", icon: Banknote },
+    ...(accounts.data ?? []).filter((a) => a.kind === "MOBILE_MONEY").map((a) => ({ m: "MOBILE_MONEY", label: a.name, icon: Smartphone, account: a })),
+    ...(accounts.data ?? []).filter((a) => a.kind === "BANK").map((a) => ({ m: "BANK_TRANSFER", label: a.name, icon: Wallet, account: a })),
+    { m: "CARD", label: "Card", icon: CreditCard },
+    ...(customer && can("pos.credit_sale") ? [{ m: "CUSTOMER_CREDIT", label: "On account", icon: User }] : []),
   ];
+
   const submit = async () => {
     setBusy(true); setErr(null);
     const attempt = (approvalId?: string, kind?: string, lineIndex?: number): Promise<any> => {
       let lines = linesRef.current;
-      let payments = tenders.filter((t) => Number(t.amount) > 0).map((t) => ({ ...t, amount_tendered: t.method === "CASH" ? (t.amount_tendered || t.amount) : undefined, reference: t.reference?.trim() || undefined }));
+      let payments = tenders.filter((t) => Number(t.amount) > 0).map(({ label: _l, ...t }) => ({ ...t, amount_tendered: t.method === "CASH" ? (t.amount_tendered || t.amount) : undefined, reference: t.reference?.trim() || undefined, payer_phone: t.payer_phone?.trim() || undefined, received: t.method === "CASH" || t.method === "CUSTOMER_CREDIT" ? undefined : t.received !== false }));
       if (approvalId && kind === "line" && lineIndex !== undefined) { lines = lines.map((l: any, i: number) => (i === lineIndex ? { ...l, approval_request_id: approvalId } : l)); linesRef.current = lines; onApprovedLine(lineIndex, approvalId); keyRef.current = newIdempotencyKey(); }
       if (approvalId && kind === "credit") { payments = payments.map((p) => (p.method === "CUSTOMER_CREDIT" ? { ...p, approval_request_id: approvalId } : p)); keyRef.current = newIdempotencyKey(); }
       return api("/sales/checkout", { body: { ...body, lines, payments }, idempotent: keyRef.current }).catch((e: ApiError) => {
@@ -294,20 +300,21 @@ function PaymentModal({ quote, body, customer, onClose, onDone, onApprovedLine }
   return (
     <Modal open onClose={onClose} title={`Payment — ${money(quote.total)}`} size="lg" footer={<><Button variant="secondary" onClick={onClose}>Back</Button><Button size="lg" loading={busy} disabled={remaining !== "0"} onClick={submit}>Complete sale</Button></>}>
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">{methods.map(({ m, label, icon: Icon }) => <Button key={m} variant="secondary" icon={<Icon className="h-4 w-4" />} onClick={() => addTender(m)}>{label}</Button>)}</div>
+        <div className="flex flex-wrap gap-2">{methods.map(({ m, label, icon: Icon, account }) => <Button key={account?.id ?? m} variant="secondary" icon={<Icon className="h-4 w-4" />} onClick={() => addTender(m, account)}>{label}</Button>)}</div>
         <div className="space-y-3">
           {tenders.map((t, i) => (
             <div key={i} className="grid items-end gap-2 rounded-md border border-slate-200 p-3 sm:grid-cols-[150px_1fr_1fr_auto]">
-              <div className="text-sm font-medium">{humanize(t.method)}</div>
+              <div className="text-sm font-medium">{t.label ?? humanize(t.method)}</div>
               <Field label="Amount">{(id) => <Input id={id} inputMode="decimal" value={t.amount} onChange={(e) => update(i, { amount: e.target.value })} />}</Field>
               {t.method === "CASH" ? (
                 <Field label="Cash tendered" hint="Leave blank for exact cash">{(id, d) => <Input id={id} aria-describedby={d} inputMode="decimal" value={t.amount_tendered ?? ""} onChange={(e) => update(i, { amount_tendered: e.target.value })} />}</Field>
               ) : t.method === "CUSTOMER_CREDIT" ? <div className="text-xs text-slate-500">Charged to {customer?.name}'s account (credit limit enforced)</div>
                 : (
                   <div className="space-y-2">
-                    {t.method === "MOBILE_MONEY" && <Field label="Payer phone">{(id) => <Input id={id} inputMode="tel" value={t.payer_phone ?? ""} onChange={(e) => update(i, { payer_phone: e.target.value })} />}</Field>}
-                    {can("pos.confirm_payment") ? <Field label="Confirmed reference" hint="Enter only after verifying funds received">{(id, d) => <Input id={id} aria-describedby={d} value={t.reference ?? ""} onChange={(e) => update(i, { reference: e.target.value })} />}</Field>
-                      : <p className="text-xs text-slate-500">Will stay pending until confirmed by the provider or an authorised user.</p>}
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-800"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={t.received !== false} onChange={(e) => update(i, { received: e.target.checked })} /> Payment received</label>
+                    {t.received === false && <p className="text-xs text-slate-500">The sale waits until the payment is confirmed by the provider or an authorised user.</p>}
+                    {t.method === "MOBILE_MONEY" && <Field label="Payer phone (optional)">{(id) => <Input id={id} inputMode="tel" value={t.payer_phone ?? ""} onChange={(e) => update(i, { payer_phone: e.target.value })} />}</Field>}
+                    <Field label="Reference (optional)">{(id) => <Input id={id} value={t.reference ?? ""} onChange={(e) => update(i, { reference: e.target.value })} />}</Field>
                   </div>
                 )}
               <Button variant="ghost" aria-label="Remove tender" onClick={() => setTenders((ts) => ts.filter((_, j) => j !== i))}><X className="h-4 w-4" /></Button>
@@ -365,7 +372,7 @@ function SaleResult({ sale, onClose, onUpdate }: { sale: any; onClose: () => voi
                     <Button size="sm" variant="ghost" onClick={() => act(() => api(`/payments/simulator/${p.attempts.find((a: any) => a.status === "PENDING").request_reference}/decline`, { body: {} }))}>Decline</Button>
                   </span>
                 )}
-                {can("pos.confirm_payment") && <><Input aria-label="Payment reference" placeholder="Verified reference" className="h-8 w-40" value={ref} onChange={(e) => setRef(e.target.value)} /><Button size="sm" disabled={ref.trim().length < 3} onClick={() => act(() => api(`/payments/${p.id}/confirm`, { body: { reference: ref } }).then(() => toast("Payment confirmed")))}>Confirm</Button></>}
+                {can("pos.confirm_payment") && <><Input aria-label="Payment reference" placeholder="Reference (optional)" className="h-8 w-40" value={ref} onChange={(e) => setRef(e.target.value)} /><Button size="sm" onClick={() => act(() => api(`/payments/${p.id}/confirm`, { body: { reference: ref.trim() || undefined } }).then(() => toast("Payment confirmed as received")))}>Confirm received</Button></>}
               </div>
             )}
           </div>

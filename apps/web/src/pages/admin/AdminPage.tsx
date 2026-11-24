@@ -20,7 +20,7 @@ export default function AdminPage() {
         { key: "data", label: "Backup & reset", hidden: !can("admin.backup") && !can("admin.reset") },
       ]} />
       {tab === "data" && <BackupAndReset />}
-      {tab === "settings" && <Settings />}
+      {tab === "settings" && <div className="space-y-4"><Settings /><DeclarationSettings /></div>}
       {tab === "branches" && <Branches />}
       {tab === "users" && <Users />}
       {tab === "roles" && <Roles />}
@@ -28,6 +28,32 @@ export default function AdminPage() {
       {tab === "policies" && <Policies />}
       {tab === "audit" && <Audit />}
     </div>
+  );
+}
+
+/** Which roles must declare opening and closing balances every day. */
+function DeclarationSettings() {
+  const toast = useToast();
+  const roles = useApi<{ roles: { code: string; name: string }[] }>("/admin/roles");
+  const cur = useApi<{ roles: string[] }>("/declarations/settings");
+  const [sel, setSel] = useState<string[] | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  if (cur.data && !sel) setSel(cur.data.roles);
+  if (!sel || !roles.data) return null;
+  const save = async () => {
+    setErr(null);
+    try { await api("/declarations/settings", { method: "PUT", body: { roles: sel } }); toast("Daily declaration roles saved"); cur.refetch(); } catch (e) { setErr(e); }
+  };
+  return (
+    <Card title="Daily balance declarations" actions={<Button size="sm" onClick={save}>Save</Button>}>
+      <p className="mb-3 text-sm text-slate-600">People with these roles must declare the money they hold (till, safe, petty cash, mobile money, bank) when they start the day — the app stays locked until they do — and again before signing out. Managers see the declarations and differences under <strong>Daily declarations</strong>.</p>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {roles.data.roles.map((r) => (
+          <label key={r.code} className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-brand-700" checked={sel.includes(r.code)} onChange={(e) => setSel(e.target.checked ? [...sel, r.code] : sel.filter((c) => c !== r.code))} /> {r.name}</label>
+        ))}
+      </div>
+      <ErrorText error={err} />
+    </Card>
   );
 }
 

@@ -128,6 +128,7 @@ export async function setupBusiness(db: PrismaClient, input: { name: string; leg
     // Business-level collection accounts
     await addFinancialAccount(tx, business.id, null, { code: "BANK-MAIN", name: "Main bank account", kind: "BANK", glCode: "5210", glParent: "5200" });
     await addFinancialAccount(tx, business.id, null, { code: "MOMO-WALLET", name: "Mobile money wallet", kind: "MOBILE_MONEY", glCode: "5510", glParent: "5500", provider: "SIMULATOR" });
+    await ensureOrangeMoneyWallet(tx, business.id);
     await tx.financialAccount.create({ data: { business_id: business.id, code: "CARD-CLEARING", name: "Card payments clearing", kind: "CLEARING", gl_account_id: ids["5850"], provider: "CARD" } });
     return business;
   });
@@ -137,6 +138,17 @@ export async function addFinancialAccount(tx: Tx, businessId: string, branchId: 
   const parent = await tx.account.findFirst({ where: { business_id: businessId, code: a.glParent } });
   const gl = await tx.account.create({ data: { business_id: businessId, code: a.glCode, name: a.name, type: "ASSET", subtype: a.kind.toLowerCase(), parent_id: parent?.id ?? null, allow_manual: false } });
   return tx.financialAccount.create({ data: { business_id: businessId, branch_id: branchId, code: a.code, name: a.name, kind: a.kind, gl_account_id: gl.id, provider: a.provider ?? null } });
+}
+
+/** An "Orange Money wallet" collection account (mobile money kind), unless the business already has one. */
+export async function ensureOrangeMoneyWallet(tx: Tx, businessId: string) {
+  if (await tx.financialAccount.findFirst({ where: { business_id: businessId, kind: "MOBILE_MONEY", name: { contains: "orange", mode: "insensitive" } } })) return null;
+  const used = new Set((await tx.account.findMany({ where: { business_id: businessId, code: { startsWith: "55" } }, select: { code: true } })).map((a) => a.code));
+  let n = 5520;
+  while (used.has(String(n))) n++;
+  let code = "ORANGE-WALLET";
+  for (let i = 2; await tx.financialAccount.findFirst({ where: { business_id: businessId, code } }); i++) code = `ORANGE-WALLET-${i}`;
+  return addFinancialAccount(tx, businessId, null, { code, name: "Orange Money wallet", kind: "MOBILE_MONEY", glCode: String(n), glParent: "5500" });
 }
 
 /** Branch with standard locations and a safe account. */

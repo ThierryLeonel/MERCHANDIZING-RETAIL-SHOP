@@ -16,7 +16,7 @@ export const TRANSACTION_TABLES = [
   "invoice_receipt_matches", "supplier_invoice_lines", "supplier_invoices", "supplier_payment_allocations", "supplier_payments", "goods_receipt_lines", "goods_receipts", "purchase_order_lines", "purchase_orders",
   "purchase_return_lines", "purchase_returns", "supplier_credit_notes", "landed_cost_allocations", "landed_cost_documents",
   "expense_lines", "expenses", "cash_counts", "cash_movements", "cashier_sessions", "funds_transfers", "settlement_lines", "settlements", "reconciliation_lines", "reconciliations",
-  "customer_opening_allocations", "customer_opening_items", "opening_balances",
+  "customer_opening_allocations", "customer_opening_items", "opening_balances", "daily_declaration_lines", "daily_declarations",
   "journal_lines", "journal_entries", "approval_actions", "approval_requests", "notifications", "outbox_events", "background_jobs", "webhook_inbox", "idempotency_records",
 ];
 /** Catalogue and contacts, removed only when clearing everything. */

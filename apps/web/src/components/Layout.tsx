@@ -1,11 +1,12 @@
-import { BarChart3, BookOpen, Boxes, Receipt, CheckSquare, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, Package, PackagePlus, Settings, ShoppingCart, Scale, Truck, Upload, Users, Wallet, X } from "lucide-react";
+import { BarChart3, BookOpen, Boxes, Receipt, CheckSquare, ChevronsLeft, ChevronsRight, ClipboardCheck, LayoutDashboard, LogOut, Menu, MoonStar, Package, PackagePlus, Settings, ShoppingCart, Scale, Truck, Upload, Users, Wallet, X } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import type { PermissionCode } from "@retail/api-contracts";
 import { t } from "../i18n";
 import type { MessageKey } from "../i18n/en";
+import { DeclarationSheet, useDayDeclaration } from "./DayDeclaration";
 import { useSession } from "../lib/session";
-import { cx, Select } from "./ui";
+import { Button, cx, Select } from "./ui";
 
 export const NAV: { to: string; label: MessageKey; icon: typeof LayoutDashboard; any: PermissionCode[] }[] = [
   { to: "/", label: "nav.dashboard", icon: LayoutDashboard, any: ["dashboard.view"] },
@@ -19,6 +20,7 @@ export const NAV: { to: string; label: MessageKey; icon: typeof LayoutDashboard;
   { to: "/accounting", label: "nav.accounting", icon: BookOpen, any: ["accounting.view", "reports.financial"] },
   { to: "/reports", label: "nav.reports", icon: BarChart3, any: ["reports.view"] },
   { to: "/approvals", label: "nav.approvals", icon: CheckSquare, any: ["approvals.view"] },
+  { to: "/declarations", label: "nav.declarations", icon: ClipboardCheck, any: ["declarations.view"] },
   { to: "/starting-stock", label: "nav.starting_stock", icon: PackagePlus, any: ["inventory.opening"] },
   { to: "/opening-balances", label: "nav.opening", icon: Scale, any: ["accounting.opening_balances"] },
   { to: "/import", label: "nav.import", icon: Upload, any: ["data.import"] },
@@ -30,6 +32,12 @@ export function Layout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("nav.collapsed") === "1");
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const decl = useDayDeclaration();
+  const [sheet, setSheet] = useState<null | "close" | "close-signout">(null);
+  const signOut = () => logout().then(() => navigate("/login"));
+  const d = decl.data;
+  const mustOpen = !!d?.required && !d.opening;
+  const canClose = !!d?.opening && !d.closing;
   const location = useLocation();
   useEffect(() => setMobileOpen(false), [location.pathname]);
   useEffect(() => {
@@ -77,9 +85,14 @@ export function Layout({ children }: { children: ReactNode }) {
               <div className="truncate text-sm font-medium leading-tight">{me?.user.full_name}</div>
               <div className="hidden truncate text-xs text-slate-500 sm:block">{me?.user.roles.map((r) => r.replace(/_/g, " ").toLowerCase()).join(", ")}</div>
             </button>
-            <button onClick={() => logout().then(() => navigate("/login"))} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100" aria-label={t("auth.signout")} title={t("auth.signout")}><LogOut className="h-5 w-5" /></button>
+            {canClose && <Button size="sm" variant="secondary" icon={<MoonStar className="h-4 w-4" />} onClick={() => setSheet("close")} className="hidden sm:inline-flex">Close my day</Button>}
+            {canClose && <button onClick={() => setSheet("close")} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 sm:hidden" aria-label="Close my day"><MoonStar className="h-5 w-5" /></button>}
+            {d?.closing && <span className="hidden rounded-lg bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 sm:inline">Day closed</span>}
+            <button onClick={() => (d?.required && canClose ? setSheet("close-signout") : signOut())} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100" aria-label={t("auth.signout")} title={t("auth.signout")}><LogOut className="h-5 w-5" /></button>
           </div>
         </header>
+        {d && mustOpen && <DeclarationSheet kind="OPENING" status={d} onDone={() => decl.refetch()} onSignOut={signOut} />}
+        {d && !mustOpen && sheet && <DeclarationSheet kind="CLOSING" status={d} signingOut={sheet === "close-signout"} onCancel={() => setSheet(null)} onDone={() => { const out = sheet === "close-signout"; setSheet(null); decl.refetch(); if (out) signOut(); }} />}
         <main id="main" className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6">{children}</main>
       </div>
     </div>

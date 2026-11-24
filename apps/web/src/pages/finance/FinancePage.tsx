@@ -95,7 +95,7 @@ function TransferForm({ accounts, onClose, onDone }: { accounts: any[]; onClose:
         <Field label="Amount (gross)">{(id) => <Input id={id} value={f.amount} onChange={set("amount")} />}</Field>
         <Field label="Fee deducted" hint="Expensed to bank/mobile money fees">{(id, d) => <Input id={id} aria-describedby={d} value={f.fee_amount} onChange={set("fee_amount")} />}</Field>
         <Field label="Date">{(id) => <Input id={id} type="date" value={f.transfer_date} onChange={set("transfer_date")} />}</Field>
-        <Field label="Reference">{(id) => <Input id={id} value={f.reference} onChange={set("reference")} />}</Field>
+        <Field label="Reference (optional)">{(id) => <Input id={id} value={f.reference} onChange={set("reference")} />}</Field>
       </div>
       <ErrorText error={err} />
     </Modal>
@@ -156,7 +156,7 @@ function Expenses() {
           <Field label="Paid from">{(id) => <Select id={id} value={f.financial_account_id} onChange={set("financial_account_id")}><option value="">Select…</option>{accounts.data?.filter((a) => a.kind !== "TILL").map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}</Field>
           <Field label="Description" className="sm:col-span-2">{(id) => <Input id={id} value={f.description} onChange={set("description")} />}</Field>
           <Field label="Amount">{(id) => <Input id={id} value={f.amount} onChange={set("amount")} />}</Field>
-          <Field label="Reference">{(id) => <Input id={id} value={f.reference} onChange={set("reference")} />}</Field>
+          <Field label="Reference (optional)">{(id) => <Input id={id} value={f.reference} onChange={set("reference")} />}</Field>
         </div>
         <p className="mt-2 text-xs text-slate-500">Till paid-outs are recorded from the POS session so the cash count stays correct.</p>
         <ErrorText error={err} />

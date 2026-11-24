@@ -127,7 +127,7 @@ function VoidSaleModal({ sale, reenter, onClose, onDone }: { sale: any; reenter:
             </Select>
           )}</Field>
           {needsAccount && <Field label="Paid from account" required>{(id) => <Select id={id} value={accountId} onChange={(e) => setAccountId(e.target.value)}><option value="">Choose…</option>{(m === "CASH_ACCOUNT" ? cashAccounts : otherAccounts).map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</Select>}</Field>}
-          {needsAccount && m !== "CASH_ACCOUNT" && <Field label="Transaction reference">{(id) => <Input id={id} value={reference} onChange={(e) => setReference(e.target.value)} />}</Field>}
+          {needsAccount && m !== "CASH_ACCOUNT" && <Field label="Transaction reference (optional)">{(id) => <Input id={id} value={reference} onChange={(e) => setReference(e.target.value)} />}</Field>}
           <label className="flex items-center gap-2"><input type="checkbox" checked={restock} onChange={(e) => setRestock(e.target.checked)} /> Put the items back into sellable stock (untick if the goods left the shop and are lost)</label>
         </> : <p className="text-slate-500">Everything on this sale was already returned — the void just records it.</p>}
         <ErrorText error={err} />
